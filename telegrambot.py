@@ -445,15 +445,11 @@ def _build_active_bet_keyboard(bet: Dict[str, Any]) -> InlineKeyboardMarkup:
 
 
 def _build_active_bet_snapshot(bet: Dict[str, Any], bet_text: str) -> str:
+    """Stabil snapshot az üzenet frissítéshez (szöveg + teljes rekord tartalom)."""
     return json.dumps(
         {
             "text": bet_text,
-            "bookmaker1": bet.get("bookmaker1"),
-            "bookmaker2": bet.get("bookmaker2"),
-            "original_link1": bet.get("original_link1"),
-            "original_link2": bet.get("original_link2"),
-            "link1": bet.get("link1"),
-            "link2": bet.get("link2"),
+            "bet": bet,
         },
         sort_keys=True,
         default=str,
@@ -526,6 +522,7 @@ async def sync_active_bets_for_user(
                     disable_web_page_preview=True,
                 )
                 sent_snapshots[bet_id] = bet_snapshot
+                _log_info(f"✏️ Fogadás frissítve (chat_id={chat_id}, bet_id={bet_id}).")
                 continue
             except TelegramError as exc:
                 print(f"⚠️ Bet frissítés sikertelen (chat_id={chat_id}, bet_id={bet_id}): {exc}")
@@ -546,6 +543,7 @@ async def sync_active_bets_for_user(
         )
         sent_message_ids[bet_id] = message.message_id
         sent_snapshots[bet_id] = bet_snapshot
+        _log_info(f"📨 Új fogadás kiküldve (chat_id={chat_id}, bet_id={bet_id}, message_id={message.message_id}).")
 
     # Már nem aktív fogadások eltüntetése (üzenet törlés)
     stale_ids = [bet_id for bet_id in sent_message_ids if bet_id not in visible_bets]
@@ -556,6 +554,7 @@ async def sync_active_bets_for_user(
             continue
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            _log_info(f"🗑️ Megszűnt fogadás törölve (chat_id={chat_id}, bet_id={stale_id}, message_id={message_id}).")
         except Exception:
             # Üzenet már törölve / nem törölhető - ilyenkor csak lokális cache-ből vesszük ki.
             pass
