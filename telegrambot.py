@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Set, List
+from typing import Any, Dict, Optional, Set, List, Tuple
 import asyncio
 import html
 import json
@@ -235,9 +235,116 @@ def _extract_total_count_from_content_range(content_range: str) -> Optional[int]
     except ValueError:
         return None
 
+
+def _safe_read_json(path: str, fallback: Any) -> Any:
+    if not path:
+        return fallback
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return fallback
+
+
+def _safe_write_json(path: str, payload: Any) -> None:
+    if not path:
+        return
+    tmp_path = f"{path}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, sort_keys=True)
+        os.replace(tmp_path, path)
+    except OSError as exc:
+        _log_warning(f"⚠️ Nem sikerült állapotfájlt írni ({path}): {exc}")
+
+
+def _bet_snapshot_payload(bet: Dict[str, Any]) -> str:
+    return json.dumps(bet, sort_keys=True, default=str)
+
+
+def _load_last_bet_snapshots() -> Dict[str, str]:
+    raw = _safe_read_json(BETS_SNAPSHOT_FILE, {})
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): str(v) for k, v in raw.items()}
+
+
+def _persist_last_bet_snapshots(snapshot_map: Dict[str, str]) -> None:
+    _safe_write_json(BETS_SNAPSHOT_FILE, snapshot_map)
+
+
+def _load_persisted_message_state() -> Dict[int, Dict[str, Dict[str, Any]]]:
+    raw = _safe_read_json(MESSAGE_STATE_FILE, {})
+    if not isinstance(raw, dict):
+        return {}
+
+    restored: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    for raw_user_id, state in raw.items():
+        if not isinstance(state, dict):
+            continue
+        try:
+            user_id = int(raw_user_id)
+        except (TypeError, ValueError):
+            continue
+
+        raw_messages = state.get("active_bet_messages", {})
+        raw_snapshots = state.get("active_bet_snapshots", {})
+        if not isinstance(raw_messages, dict) or not isinstance(raw_snapshots, dict):
+            continue
+
+        messages: Dict[str, int] = {}
+        for bet_id, message_id in raw_messages.items():
+            try:
+                messages[str(bet_id)] = int(message_id)
+            except (TypeError, ValueError):
+                continue
+
+        snapshots = {str(k): str(v) for k, v in raw_snapshots.items()}
+        restored[user_id] = {
+            "active_bet_messages": messages,
+            "active_bet_snapshots": snapshots,
+        }
+    return restored
+
+
+def _persist_message_state() -> None:
+    payload: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for user_id, session in USER_SESSIONS.items():
+        payload[str(user_id)] = {
+            "active_bet_messages": dict(session.get("active_bet_messages", {})),
+            "active_bet_snapshots": dict(session.get("active_bet_snapshots", {})),
+        }
+    _safe_write_json(MESSAGE_STATE_FILE, payload)
+
+
+def _compute_bet_diff(active_bets: List[Dict[str, Any]]) -> Tuple[int, int, int, Dict[str, str]]:
+    new_snapshot_map: Dict[str, str] = {}
+    added = 0
+    changed = 0
+    dropped = 0
+
+    for bet in active_bets:
+        bet_id = _resolve_bet_id(bet)
+        if not bet_id:
+            continue
+        current_snapshot = _bet_snapshot_payload(bet)
+        previous_snapshot = LAST_BET_SNAPSHOTS.get(bet_id)
+        if previous_snapshot is None:
+            added += 1
+        elif previous_snapshot != current_snapshot:
+            changed += 1
+        new_snapshot_map[bet_id] = current_snapshot
+
+    dropped = max(0, len(LAST_BET_SNAPSHOTS) - len(new_snapshot_map))
+    return added, changed, dropped, new_snapshot_map
+
 # Aktív fogadások in-memory cache (később DB-re cserélhető)
 ACTIVE_BETS: Dict[str, Dict[str, Any]] = {}
 SUPABASE_LAST_SYNC_SUMMARY = "n/a"
+
+BETS_SNAPSHOT_FILE = os.getenv("BETS_SNAPSHOT_FILE", "bets_snapshot.txt").strip() or "bets_snapshot.txt"
+MESSAGE_STATE_FILE = os.getenv("MESSAGE_STATE_FILE", "message_state.txt").strip() or "message_state.txt"
+LAST_BET_SNAPSHOTS: Dict[str, str] = {}
 
 # Demo session tárolás memóriában (újraindítás után törlődik)
 USER_SESSIONS: Dict[int, Dict[str, object]] = {}
@@ -298,6 +405,8 @@ class ActivationService:
 
 
 ACTIVATION_SERVICE = ActivationService()
+LAST_BET_SNAPSHOTS = _load_last_bet_snapshots()
+PERSISTED_MESSAGE_STATE = _load_persisted_message_state()
 
 
 # =========================
@@ -305,13 +414,14 @@ ACTIVATION_SERVICE = ActivationService()
 # =========================
 def get_session(user_id: int) -> Dict[str, object]:
     if user_id not in USER_SESSIONS:
+        persisted = PERSISTED_MESSAGE_STATE.get(user_id, {})
         USER_SESSIONS[user_id] = {
             "state": "awaiting_code",   # awaiting_code | awaiting_guide | selecting_books | ready
             "selected": set(),          # Set[str]
             "activated": False,
             "receive_bets": False,
-            "active_bet_messages": {},  # Dict[str, int] -> bet_id: message_id
-            "active_bet_snapshots": {}, # Dict[str, str] -> bet_id: bet_text
+            "active_bet_messages": dict(persisted.get("active_bet_messages", {})),
+            "active_bet_snapshots": dict(persisted.get("active_bet_snapshots", {})),
         }
     return USER_SESSIONS[user_id]
 
@@ -330,6 +440,10 @@ def set_active_bets(active_bets: List[Dict[str, Any]]) -> None:
     Külső DB szinkron ehhez a metódushoz küldje az éppen aktív fogadásokat.
     A bet-enként stabil kulcs: bet["id"].
     """
+    global LAST_BET_SNAPSHOTS
+
+    added_count, changed_count, dropped_count, new_snapshot_map = _compute_bet_diff(active_bets)
+
     ACTIVE_BETS.clear()
     dropped_without_id = 0
     for bet in active_bets:
@@ -338,6 +452,16 @@ def set_active_bets(active_bets: List[Dict[str, Any]]) -> None:
             ACTIVE_BETS[bet_id] = bet
         else:
             dropped_without_id += 1
+
+    LAST_BET_SNAPSHOTS = new_snapshot_map
+    _persist_last_bet_snapshots(LAST_BET_SNAPSHOTS)
+
+    _log_info(
+        "ℹ️ Bet diff összegzés: "
+        f"új={added_count}, módosult={changed_count}, eltűnt={dropped_count}, "
+        f"feldolgozott={len(ACTIVE_BETS)}"
+    )
+
     if dropped_without_id:
         _log_warning(
             f"⚠️ {dropped_without_id} Supabase sor kihagyva, mert nem volt azonosító mező "
@@ -557,6 +681,8 @@ async def sync_active_bets_for_user(
             # Üzenet már törölve / nem törölhető - ilyenkor csak lokális cache-ből vesszük ki.
             pass
 
+    _persist_message_state()
+
 
 async def sync_active_bets_for_all_users(context: ContextTypes.DEFAULT_TYPE) -> None:
     for user_id, session in USER_SESSIONS.items():
@@ -762,6 +888,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "active_bet_messages": {},
         "active_bet_snapshots": {},
     }
+    _persist_message_state()
 
     await update.message.reply_text(
         "👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>\n\n"
@@ -826,6 +953,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     "active_bet_messages": {},
                     "active_bet_snapshots": {},
                 }
+                _persist_message_state()
 
             session["activated"] = True
             session["state"] = "awaiting_guide"
@@ -959,6 +1087,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         session["receive_bets"] = True
         session["active_bet_messages"] = {}
         session["active_bet_snapshots"] = {}
+        _persist_message_state()
 
         await query.answer("GoldenTipsHungary demo tipp érkezik 🚀")
 
