@@ -445,6 +445,7 @@ def get_session(user_id: int) -> Dict[str, object]:
             "receive_bets": False,
             "active_bet_messages": dict(persisted.get("active_bet_messages", {})),
             "active_bet_snapshots": dict(persisted.get("active_bet_snapshots", {})),
+            "no_bets_notice_sent": False,
         }
     return USER_SESSIONS[user_id]
 
@@ -646,6 +647,24 @@ async def sync_active_bets_for_user(
             _log_info(f"ℹ️ Vannak fogadások, de jelenleg egyik sem aktív (chat_id={chat_id}).")
         else:
             _log_info(f"ℹ️ Nincs jelenleg aktív és szűrőnek megfelelő fogadás egyszerre (chat_id={chat_id}).")
+
+        if not bool(session.get("no_bets_notice_sent")):
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    "ℹ️ <b>Jelenleg nincs elérhető fogadás</b> a kiválasztott irodapárosítással.\n\n"
+                    "🔄 Adj hozzá több irodát a <b>/irodak</b> paranccsal, "
+                    "vagy várj, amíg új arbitrázs fogadás érkezik."
+                ),
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+            session["no_bets_notice_sent"] = True
+            state_changed = True
+
+    if visible_bets and bool(session.get("no_bets_notice_sent")):
+        session["no_bets_notice_sent"] = False
+        state_changed = True
 
     # Új fogadások küldése + módosított fogadások frissítése
     for bet_id, bet in visible_bets.items():
@@ -925,6 +944,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "receive_bets": False,
         "active_bet_messages": {},
         "active_bet_snapshots": {},
+        "no_bets_notice_sent": False,
     }
     _mark_message_state_dirty()
     _persist_message_state(force=True)
@@ -991,6 +1011,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     "receive_bets": False,
                     "active_bet_messages": {},
                     "active_bet_snapshots": {},
+                    "no_bets_notice_sent": False,
                 }
                 _mark_message_state_dirty()
                 _persist_message_state(force=True)
@@ -1013,7 +1034,7 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await update.message.reply_text(
                 "❌ <b>GoldenTipsHungary</b>\n"
                 "Hibás aktivációs kód.\n\n"
-                "Próbáld újra (demo kód: <b>123</b>).",
+                "Próbáld újra (teszt kód: <b>123</b>).",
                 parse_mode=ParseMode.HTML,
             )
         return
@@ -1127,10 +1148,11 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         session["receive_bets"] = True
         session["active_bet_messages"] = {}
         session["active_bet_snapshots"] = {}
+        session["no_bets_notice_sent"] = False
         _mark_message_state_dirty()
         _persist_message_state(force=True)
 
-        await query.answer("GoldenTipsHungary demo tipp érkezik 🚀")
+        await query.answer("GoldenTipsHungary tipp érkezik 🚀")
 
         await query.edit_message_text(
             text=(
@@ -1156,35 +1178,11 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     await update.message.reply_text(
-        "/start - GoldenTipsHungary demo flow indítása\n"
+        "/start - GoldenTipsHungary flow indítása\n"
         "/irodak - szűrt irodák módosítása\n"
-        "/supabase - Supabase kapcsolódási igények\n"
         "/help - segítség"
     )
 
-
-async def supabase_requirements_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.message is None:
-        return
-
-    status_text = "✅ konfigurálva" if _supabase_configured() else "⚠️ nincs konfigurálva"
-    interval_text = _format_sync_interval(SUPABASE_SYNC_INTERVAL_SECONDS)
-    await update.message.reply_text(
-        "Supabase bekötéshez ezek kellenek:\n"
-        "- SUPABASE_URL\n"
-        "- SUPABASE_SERVICE_ROLE_KEY (ajánlott szerver oldali olvasáshoz)\n- SUPABASE_KEY vagy SUPABASE_ANON_KEY (fallback)\n"
-        "- SUPABASE_BETS_TABLE (alapértelmezett: tips)\n"
-        "- SUPABASE_QUERY_LIMIT (alapértelmezett: 100, maximum: 1000)\n"
-        "- SUPABASE_SYNC_INTERVAL_SECONDS (alapértelmezett: 35, minimum: 5)\n\n"
-        "Elvárt tábla mezők minimum:\n"
-        "- id (egyedi)\n"
-        "- text vagy (book1_key + book2_key) vagy (bookmaker1 + bookmaker2)\n\n"
-        f"Állapot: {status_text}\n"
-        f"Jelenlegi adatbázis-ellenőrzési gyakoriság: {interval_text}\n"
-        f"Utolsó Supabase sync: {SUPABASE_LAST_SYNC_SUMMARY}\n"
-        "A bot folyamatosan szinkronizál, így új/módosított/törölt sorok megjelennek vagy eltűnnek a chaten.\n"
-        "A service role kulcsot ne mentsd a tárolóba, csak szerver oldali környezeti változóba."
-    )
 
 
 # =========================
@@ -1195,7 +1193,6 @@ def main() -> None:
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("irodak", filters_handler))
-    app.add_handler(CommandHandler("supabase", supabase_requirements_handler))
     app.add_handler(CommandHandler("help", help_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
@@ -1203,7 +1200,7 @@ def main() -> None:
     if _supabase_configured() and app.job_queue is not None:
         app.job_queue.run_repeating(sync_supabase_bets_job, interval=SUPABASE_SYNC_INTERVAL_SECONDS, first=1)
 
-    print("✅ GoldenTipsHungary demo bot elindult (polling)...")
+    print("✅ GoldenTipsHungary bot elindult (polling)...")
     app.run_polling(drop_pending_updates=True)
 
 

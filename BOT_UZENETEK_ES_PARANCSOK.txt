@@ -5,7 +5,6 @@ GoldenTipsHungary Telegram bot – összes felhasználói üzenet és parancs
 ---------------------
 /start
 /irodak
-/supabase
 /help
 
 2) Felhasználónak küldött chat üzenetek (reply_text / edit_message_text / send_message)
@@ -23,7 +22,7 @@ A) Indulás / aktiváció
 - ❌ <b>GoldenTipsHungary</b>
   Hibás aktivációs kód.
 
-  Próbáld újra (demo kód: <b>123</b>).
+  Próbáld újra (teszt kód: <b>123</b>).
 
 - Először nyisd meg az útmutatót, majd nyomd meg: <b>✅ Okés, elolvastam az útmutatót</b>.
 
@@ -79,29 +78,9 @@ E) Aktív arbitrázs üzenet (dinamikus, többször küldhető/frissíthető)
   ⚙️ Szűrő módosítás: <b>/irodak</b>
 
 F) /help válasz
-- /start - GoldenTipsHungary demo flow indítása
+- /start - GoldenTipsHungary flow indítása
   /irodak - szűrt irodák módosítása
-  /supabase - Supabase kapcsolódási igények
   /help - segítség
-
-G) /supabase válasz
-- Supabase bekötéshez ezek kellenek:
-  - SUPABASE_URL
-  - SUPABASE_SERVICE_ROLE_KEY (ajánlott szerver oldali olvasáshoz)
-  - SUPABASE_KEY vagy SUPABASE_ANON_KEY (fallback)
-  - SUPABASE_BETS_TABLE (alapértelmezett: tips)
-  - SUPABASE_QUERY_LIMIT (alapértelmezett: 100, maximum: 1000)
-  - SUPABASE_SYNC_INTERVAL_SECONDS (alapértelmezett: 35, minimum: 5)
-
-  Elvárt tábla mezők minimum:
-  - id (egyedi)
-  - text vagy (book1_key + book2_key) vagy (bookmaker1 + bookmaker2)
-
-  Állapot: {status_text}
-  Jelenlegi adatbázis-ellenőrzési gyakoriság: {interval_text}
-  Utolsó Supabase sync: {SUPABASE_LAST_SYNC_SUMMARY}
-  A bot folyamatosan szinkronizál, így új/módosított/törölt sorok megjelennek vagy eltűnnek a chaten.
-  A service role kulcsot ne mentsd a tárolóba, csak szerver oldali környezeti változóba.
 
 3) Callback válaszok (query.answer - toast/alert)
 -------------------------------------------------
@@ -113,7 +92,7 @@ G) /supabase válasz
 - Hozzáadva ✅
 - Maximum 6 irodát választhatsz.
 - Válassz legalább 2 irodát az arbitrázshoz.
-- GoldenTipsHungary demo tipp érkezik 🚀
+- GoldenTipsHungary tipp érkezik 🚀
 - Ismeretlen művelet.
 
 4) Inline gombfeliratok (amit a user lát)

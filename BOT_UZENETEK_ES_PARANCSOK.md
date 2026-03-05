@@ -4,7 +4,6 @@
 
 - `/start`
 - `/irodak`
-- `/supabase`
 - `/help`
 
 ## Felhasználónak küldött chat üzenetek
@@ -17,7 +16,7 @@
 - Hibás kód esetén:
   - `❌ <b>GoldenTipsHungary</b>`
   - `Hibás aktivációs kód.`
-  - `Próbáld újra (demo kód: <b>123</b>).`
+  - `Próbáld újra (teszt kód: <b>123</b>).`
 - Állapot-specifikus figyelmeztetések:
   - útmutató visszaigazolás hiánya
   - irodaválasztásra felszólítás
@@ -56,17 +55,9 @@ Template:
 ### 6) /help
 
 - Parancslista szöveg:
-  - `/start - GoldenTipsHungary demo flow indítása`
+  - `/start - GoldenTipsHungary flow indítása`
   - `/irodak - szűrt irodák módosítása`
-  - `/supabase - Supabase kapcsolódási igények`
   - `/help - segítség`
-
-### 7) /supabase
-
-- Konfigurációs követelmények listája
-- Állapot (`konfigurálva` / `nincs konfigurálva`)
-- Jelenlegi sync gyakoriság
-- Utolsó Supabase sync összegzés
 
 ## Callback válaszok (toast / alert)
 
@@ -78,7 +69,7 @@ Template:
 - `Hozzáadva ✅`
 - `Maximum 6 irodát választhatsz.`
 - `Válassz legalább 2 irodát az arbitrázshoz.`
-- `GoldenTipsHungary demo tipp érkezik 🚀`
+- `GoldenTipsHungary tipp érkezik 🚀`
 - `Ismeretlen művelet.`
 
 ## Inline gombfeliratok
