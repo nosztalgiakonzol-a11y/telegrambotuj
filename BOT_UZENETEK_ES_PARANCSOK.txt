@@ -1,0 +1,133 @@
+GoldenTipsHungary Telegram bot – összes felhasználói üzenet és parancs
+====================================================================
+
+1) Telegram parancsok
+---------------------
+/start
+/irodak
+/supabase
+/help
+
+2) Felhasználónak küldött chat üzenetek (reply_text / edit_message_text / send_message)
+----------------------------------------------------------------------------------------
+A) Indulás / aktiváció
+- 👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>
+
+  Kérlek add meg a vásárláshoz kapott <b>aktivációs kódodat</b> az induláshoz.
+
+- Először aktiváld a fiókodat a /start paranccsal.
+
+- 📘 <b>Mielőtt elkezdenél fogadni</b>, érdemes elolvasni az útmutatónkat.
+  Csak 5–6 perc, rengeteg kezdőhibát segít elkerülni, és a praktikákkal több pénzt is tudsz keresni.
+
+- ❌ <b>GoldenTipsHungary</b>
+  Hibás aktivációs kód.
+
+  Próbáld újra (demo kód: <b>123</b>).
+
+- Először nyisd meg az útmutatót, majd nyomd meg: <b>✅ Okés, elolvastam az útmutatót</b>.
+
+- 👆 Válassz az inline gombokkal, majd nyomd meg a <b>✅ Kész</b> gombot.
+
+- Írd be: /start (újrakezdéshez)
+
+B) Irodaválasztás képernyő (selection_text)
+- Fejléc (normál): ✅ <b>GoldenTipsHungary</b> • Aktiváció sikeres
+- Fejléc (módosítás): ⚙️ <b>GoldenTipsHungary</b> • Szűrők módosítása
+
+Törzs:
+Add meg, mely irodáknál vagy regisztrálva
+(többet is kiválaszthatsz, de maximum 6-ot), majd nyomd meg a <b>✅ Kész</b> gombot.
+
+💰 Nincs fiókod valamelyik irodánál? <a href="{AFFILIATE_LINK}"><b>Itt tudsz regisztrálni</b></a>.
+
+📘 Ha valami nem tiszta, <a href="{GUIDE_LINK}"><b>olvasd el az útmutatót</b></a>.
+
+<b>Kiválasztott irodák:</b>
+{selected_list}
+
+C) Útmutató visszaigazolás után
+- ✅ Útmutató visszaigazolva.
+
+D) Irodák mentése után
+- ✅ <b>GoldenTipsHungary</b>
+  Irodák elmentve!
+
+  Ha módosítanád, hogy melyik irodákról kapj értesítést, írd be a chatbe: <b>/irodak</b>
+  📘 Útmutató: <a href="{GUIDE_LINK}"><b>Itt tudod elolvasni</b></a>.
+
+  Küldöm a jelenleg aktív fogadásokat...
+
+E) Aktív arbitrázs üzenet (dinamikus, többször küldhető/frissíthető)
+- 🔒 <b>ÚJ ARBITRÁZS FOGADÁS</b>
+
+  💸 <b>Profit:</b> {profit_percent}
+  🟢 <b>STÁTUSZ:</b> AKTÍV
+  📅 <b>Dátum:</b> {match_date} • ⏳
+
+  {bookmaker1_emoji} <a href="{bookmaker1_affiliate}"><b>{bookmaker1_name}</b></a>
+  <b>Mérkőzés:</b> <a href="{original_link1_or_fallback}">{match_name}</a>
+  <b>Fogadás:</b> {option1}
+  <b>Odds:</b> {odds1}
+
+  {bookmaker2_emoji} <a href="{bookmaker2_affiliate}"><b>{bookmaker2_name}</b></a>
+  <b>Mérkőzés:</b> <a href="{original_link2_or_fallback}">{match_name}</a>
+  <b>Fogadás:</b> {option2}
+  <b>Odds:</b> {odds2}
+
+  ━━━━━━━━━━━━━━━
+  ⚙️ Szűrő módosítás: <b>/irodak</b>
+
+F) /help válasz
+- /start - GoldenTipsHungary demo flow indítása
+  /irodak - szűrt irodák módosítása
+  /supabase - Supabase kapcsolódási igények
+  /help - segítség
+
+G) /supabase válasz
+- Supabase bekötéshez ezek kellenek:
+  - SUPABASE_URL
+  - SUPABASE_SERVICE_ROLE_KEY (ajánlott szerver oldali olvasáshoz)
+  - SUPABASE_KEY vagy SUPABASE_ANON_KEY (fallback)
+  - SUPABASE_BETS_TABLE (alapértelmezett: tips)
+  - SUPABASE_QUERY_LIMIT (alapértelmezett: 100, maximum: 1000)
+  - SUPABASE_SYNC_INTERVAL_SECONDS (alapértelmezett: 35, minimum: 5)
+
+  Elvárt tábla mezők minimum:
+  - id (egyedi)
+  - text vagy (book1_key + book2_key) vagy (bookmaker1 + bookmaker2)
+
+  Állapot: {status_text}
+  Jelenlegi adatbázis-ellenőrzési gyakoriság: {interval_text}
+  Utolsó Supabase sync: {SUPABASE_LAST_SYNC_SUMMARY}
+  A bot folyamatosan szinkronizál, így új/módosított/törölt sorok megjelennek vagy eltűnnek a chaten.
+  A service role kulcsot ne mentsd a tárolóba, csak szerver oldali környezeti változóba.
+
+3) Callback válaszok (query.answer - toast/alert)
+-------------------------------------------------
+- Először /start és aktivációs kód szükséges.
+- Szuper! Jöhetnek a kiválasztott irodák ✅
+- Szűrőmódosítás megnyitva ⚙️
+- Ismeretlen iroda.
+- Eltávolítva ✅
+- Hozzáadva ✅
+- Maximum 6 irodát választhatsz.
+- Válassz legalább 2 irodát az arbitrázshoz.
+- GoldenTipsHungary demo tipp érkezik 🚀
+- Ismeretlen művelet.
+
+4) Inline gombfeliratok (amit a user lát)
+------------------------------------------
+- Bookmaker gombok: "{emoji} {bookmaker_name}" (kiválasztott esetben "✅ {emoji} {bookmaker_name}")
+- 💰 Nincs fiókod? Regisztrálj
+- ✅ Kész
+- 📘 Útmutató megnyitása
+- ✅ Okés, elolvastam az útmutatót
+- Aktív bet üzenetnél gombok:
+  - {bookmaker1_name}
+  - {bookmaker2_name}
+  - 🧮 Kalkulátor
+  - 💰 Nincs fiókod? Regisztrálj
+
+Megjegyzés:
+- A dinamikus értékek ({...}) adatbázisból vagy konfigurációból töltődnek.
