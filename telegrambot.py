@@ -30,7 +30,7 @@ BOT_TOKEN = "8645094734:AAGUxAxGM9maNGMrVHMvRUk97z8NvuVgiFQ"
 
 MATCH_LINK = "https://sajatoldalad.hu/meccs"
 CALC_LINK = "https://arbify-bet.hu/calculator"
-CALC_DYNAMIC_BASE_URL = os.getenv("CALC_DYNAMIC_BASE_URL", "http://arbifybet.hu/calculator").strip() or "http://arbifybet.hu/calculator"
+CALC_DYNAMIC_BASE_URL = os.getenv("CALC_DYNAMIC_BASE_URL", "https://arbify-bet.hu/calculator").strip() or "https://arbify-bet.hu/calculator"
 CALC_DEFAULT_STAKE = os.getenv("CALC_DEFAULT_STAKE", "14950").strip() or "14950"
 AFFILIATE_LINK = "https://arbify-bet.hu/register?lang=rs"
 GUIDE_LINK = "https://arbify-bet.hu/tutorial-sr"
