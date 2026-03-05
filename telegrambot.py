@@ -31,21 +31,21 @@ CALC_LINK = "https://arbify-bet.hu/calculator"
 AFFILIATE_LINK = "https://arbify-bet.hu/register?lang=rs"
 GUIDE_LINK = "https://arbify-bet.hu/tutorial-sr"
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://sonudgyyvxncdcganppl.supabase.co").strip().rstrip("/")
 # SUPABASE_KEY marad elsődleges a visszamenőleges kompatibilitás miatt.
 # SUPABASE_SERVICE_ROLE_KEY csak szerver oldali környezetben használandó (ne kerüljön repo-ba).
 SUPABASE_KEY = (
     os.getenv("SUPABASE_KEY")
     or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     or os.getenv("SUPABASE_ANON_KEY")
-    or ""
+    or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvbnVkZ3l5dnhuY2RjZ2FucHBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMzA5NDMsImV4cCI6MjA3NTYwNjk0M30.QhtBEhUYoZU8dukJ2bNcy95bXW7unxln8NPe_13eBQ4"
 ).strip()
 SUPABASE_BETS_TABLE = os.getenv("SUPABASE_BETS_TABLE", "tips").strip() or "tips"
 BOT_LOG_FILE = os.getenv("BOT_LOG_FILE", "").strip()
 try:
-    SUPABASE_SYNC_INTERVAL_SECONDS = max(3, int(os.getenv("SUPABASE_SYNC_INTERVAL_SECONDS", "10")))
+    SUPABASE_SYNC_INTERVAL_SECONDS = max(5, int(os.getenv("SUPABASE_SYNC_INTERVAL_SECONDS", "35")))
 except ValueError:
-    SUPABASE_SYNC_INTERVAL_SECONDS = 10
+    SUPABASE_SYNC_INTERVAL_SECONDS = 35
 try:
     SUPABASE_QUERY_LIMIT = min(1000, max(1, int(os.getenv("SUPABASE_QUERY_LIMIT", "100"))))
 except ValueError:
@@ -151,7 +151,15 @@ def _parse_match_start(value: Any) -> Optional[datetime]:
 
 
 def _is_bet_active(bet: Dict[str, Any]) -> bool:
-    match_start = _parse_match_start(bet.get("match_start"))
+    is_active_raw = bet.get("is_active")
+    if isinstance(is_active_raw, bool) and not is_active_raw:
+        return False
+
+    status_raw = str(bet.get("status") or "").strip().lower()
+    if status_raw in {"inactive", "closed", "expired", "settled", "finished"}:
+        return False
+
+    match_start = _parse_match_start(_get_bet_field_value(bet, "match_start"))
     if match_start is None:
         return True
     return match_start > datetime.now(timezone.utc)
@@ -160,7 +168,13 @@ def _is_bet_active(bet: Dict[str, Any]) -> bool:
 def _format_match_start(match_start: Optional[datetime]) -> str:
     if match_start is None:
         return "ismeretlen"
-    return match_start.astimezone().strftime("%Y-%m-%d, %H:%M")
+    local_match_start = match_start.astimezone()
+    month_names = {
+        1: "Január", 2: "Február", 3: "Március", 4: "Április", 5: "Május", 6: "Június",
+        7: "Július", 8: "Augusztus", 9: "Szeptember", 10: "Október", 11: "November", 12: "December",
+    }
+    month_name = month_names.get(local_match_start.month, str(local_match_start.month))
+    return f"{month_name} {local_match_start.day}, {local_match_start.strftime('%H:%M')}"
 
 
 def _format_sync_interval(seconds: int) -> str:
@@ -559,7 +573,7 @@ def _load_active_bets_from_supabase() -> Optional[List[Dict[str, Any]]]:
         _log_warning(f"⚠️ Supabase sync kihagyva: {SUPABASE_LAST_SYNC_SUMMARY}.")
         return None
 
-    query = urllib_parse.urlencode({"select": "*", "limit": SUPABASE_QUERY_LIMIT})
+    query = urllib_parse.urlencode({"select": "*", "order": "created_at.desc", "limit": SUPABASE_QUERY_LIMIT})
     url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_BETS_TABLE}?{query}"
     req = urllib_request.Request(
         url,
@@ -977,7 +991,7 @@ async def supabase_requirements_handler(update: Update, context: ContextTypes.DE
         "- opcionálisan: SUPABASE_SERVICE_ROLE_KEY (csak szerver oldali env-ben)\n"
         "- SUPABASE_BETS_TABLE (alapértelmezett: tips)\n"
         "- SUPABASE_QUERY_LIMIT (alapértelmezett: 100, maximum: 1000)\n"
-        "- SUPABASE_SYNC_INTERVAL_SECONDS (alapértelmezett: 10, minimum: 3)\n\n"
+        "- SUPABASE_SYNC_INTERVAL_SECONDS (alapértelmezett: 35, minimum: 5)\n\n"
         "Elvárt tábla mezők minimum:\n"
         "- id (egyedi)\n"
         "- text vagy (book1_key + book2_key) vagy (bookmaker1 + bookmaker2)\n\n"
