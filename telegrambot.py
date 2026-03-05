@@ -1296,6 +1296,39 @@ def _send_shutdown_notice_sync() -> None:
             _log_warning(f"⚠️ Leállási értesítés sikertelen (chat_id={chat_id}): {exc}")
 
 
+def _send_startup_restart_notice_sync() -> None:
+    if os.getenv("DISABLE_STARTUP_RESTART_NOTICE", "").strip().lower() in {"1", "true", "yes"}:
+        return
+
+    user_ids = _collect_shutdown_notice_user_ids()
+    if not user_ids:
+        return
+
+    message_text = (
+        "ℹ️ A bot újraindult.\n\n"
+        "Ahhoz, hogy újra kapj fogadásokat, kérlek írd be: /start"
+    )
+
+    for chat_id in user_ids:
+        payload = urllib_parse.urlencode({
+            "chat_id": str(chat_id),
+            "text": message_text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+        }).encode("utf-8")
+        req = urllib_request.Request(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        try:
+            with urllib_request.urlopen(req, timeout=5):
+                pass
+        except Exception as exc:
+            _log_warning(f"⚠️ Indulási /start értesítés sikertelen (chat_id={chat_id}): {exc}")
+
+
 def _register_shutdown_hooks() -> None:
     if os.getenv("DISABLE_SHUTDOWN_NOTICE", "").strip().lower() in {"1", "true", "yes"}:
         return
@@ -1328,6 +1361,8 @@ def main() -> None:
 
     if _supabase_configured() and app.job_queue is not None:
         app.job_queue.run_repeating(sync_supabase_bets_job, interval=SUPABASE_SYNC_INTERVAL_SECONDS, first=1)
+
+    _send_startup_restart_notice_sync()
 
     print("✅ GoldenTipsHungary bot elindult (polling)...")
     app.run_polling(drop_pending_updates=True)
