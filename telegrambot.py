@@ -543,8 +543,9 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
 
     book1_name = html.escape(str(bet.get("bookmaker1") or book1.get("name", "Bookmaker 1")).strip())
     book2_name = html.escape(str(bet.get("bookmaker2") or book2.get("name", "Bookmaker 2")).strip())
-    book1_affiliate = _safe_url(bet.get("link1") or book1.get("url", ""))
-    book2_affiliate = _safe_url(bet.get("link2") or book2.get("url", ""))
+    # A fogadóiroda neve mindig a fix, irodához tartozó regisztrációs linkre mutasson.
+    book1_affiliate = _safe_url(book1.get("url", ""))
+    book2_affiliate = _safe_url(book2.get("url", ""))
     match_link1 = _safe_url(bet.get("original_link1") or bet.get("quick_link_url") or MATCH_LINK)
     match_link2 = _safe_url(bet.get("original_link2") or bet.get("quick_link_url") or MATCH_LINK)
     if not book1_affiliate:
