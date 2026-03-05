@@ -4,6 +4,7 @@ import asyncio
 import html
 import json
 import os
+import signal
 import time
 from datetime import datetime, timezone
 from urllib import error as urllib_error
@@ -1250,10 +1251,72 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 
+def _collect_shutdown_notice_user_ids() -> List[int]:
+    user_ids: Set[int] = set()
+
+    for user_id, session in USER_SESSIONS.items():
+        if bool(session.get("activated") and session.get("receive_bets")):
+            user_ids.add(user_id)
+
+    for raw_user_id in PERSISTED_MESSAGE_STATE.keys():
+        if isinstance(raw_user_id, int):
+            user_ids.add(raw_user_id)
+
+    return sorted(user_ids)
+
+
+def _send_shutdown_notice_sync() -> None:
+    user_ids = _collect_shutdown_notice_user_ids()
+    if not user_ids:
+        return
+
+    message_text = (
+        "⚠️ A bot jelenleg leállt.\n\n"
+        "A fogadások újraindításához kérlek írd be: /start"
+    )
+
+    for chat_id in user_ids:
+        payload = urllib_parse.urlencode({
+            "chat_id": str(chat_id),
+            "text": message_text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+        }).encode("utf-8")
+        req = urllib_request.Request(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        try:
+            with urllib_request.urlopen(req, timeout=5):
+                pass
+        except Exception as exc:
+            _log_warning(f"⚠️ Leállási értesítés sikertelen (chat_id={chat_id}): {exc}")
+
+
+def _register_shutdown_hooks() -> None:
+    if os.getenv("DISABLE_SHUTDOWN_NOTICE", "").strip().lower() in {"1", "true", "yes"}:
+        return
+
+    def _handle_shutdown_signal(signum: int, frame: Any) -> None:
+        _log_info(f"ℹ️ Leállási jel érkezett ({signum}), értesítés küldése...")
+        _send_shutdown_notice_sync()
+        raise SystemExit(0)
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            signal.signal(sig, _handle_shutdown_signal)
+        except Exception:
+            continue
+
+
+
 # =========================
 # MAIN
 # =========================
 def main() -> None:
+    _register_shutdown_hooks()
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_handler))
