@@ -29,6 +29,8 @@ BOT_TOKEN = "8645094734:AAGUxAxGM9maNGMrVHMvRUk97z8NvuVgiFQ"
 
 MATCH_LINK = "https://sajatoldalad.hu/meccs"
 CALC_LINK = "https://arbify-bet.hu/calculator"
+CALC_DYNAMIC_BASE_URL = os.getenv("CALC_DYNAMIC_BASE_URL", "http://arbifybet.hu/calculator").strip() or "http://arbifybet.hu/calculator"
+CALC_DEFAULT_STAKE = os.getenv("CALC_DEFAULT_STAKE", "14950").strip() or "14950"
 AFFILIATE_LINK = "https://arbify-bet.hu/register?lang=rs"
 GUIDE_LINK = "https://arbify-bet.hu/tutorial-sr"
 
@@ -570,6 +572,43 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
     )
 
 
+
+def _calculator_book_param_name(bookmaker_name: str) -> str:
+    normalized = "".join(ch for ch in str(bookmaker_name or "").strip().lower() if ch.isalnum())
+    if not normalized:
+        normalized = "bookmaker"
+    return f"{normalized}Url"
+
+
+def _build_calculator_link(bet: Dict[str, Any]) -> str:
+    odds1 = str(_get_bet_field_value(bet, "odds1") or "").strip()
+    odds2 = str(_get_bet_field_value(bet, "odds2") or "").strip()
+    book1_name = str(_get_bet_field_value(bet, "bookmaker1") or _get_bet_bookmaker_value(bet, "book1_key", "bookmaker1") or "Bookmaker1").strip()
+    book2_name = str(_get_bet_field_value(bet, "bookmaker2") or _get_bet_bookmaker_value(bet, "book2_key", "bookmaker2") or "Bookmaker2").strip()
+
+    book1_url = _safe_url(bet.get("original_link1") or bet.get("link1") or "")
+    book2_url = _safe_url(bet.get("original_link2") or bet.get("link2") or "")
+    match_name = str(_get_bet_field_value(bet, "match_name") or "").strip()
+    option1 = str(_get_bet_field_value(bet, "option1") or "").strip()
+    option2 = str(_get_bet_field_value(bet, "option2") or "").strip()
+
+    query_pairs: List[Tuple[str, str]] = [
+        ("odds1", odds1),
+        ("odds2", odds2),
+        ("odds1Book", book1_name),
+        ("odds2Book", book2_name),
+        ("stake", CALC_DEFAULT_STAKE),
+        ("odds1Label", book1_name),
+        ("odds2Label", book2_name),
+        (_calculator_book_param_name(book1_name), book1_url),
+        (_calculator_book_param_name(book2_name), book2_url),
+        ("Meccs", match_name),
+        ("F1", option1),
+        ("F2", option2),
+    ]
+    return f"{CALC_DYNAMIC_BASE_URL}?{urllib_parse.urlencode(query_pairs)}"
+
+
 def _build_active_bet_keyboard(bet: Dict[str, Any]) -> InlineKeyboardMarkup:
     book1_source = _get_bet_bookmaker_value(bet, "book1_key", "bookmaker1")
     book2_source = _get_bet_bookmaker_value(bet, "book2_key", "bookmaker2")
@@ -590,7 +629,7 @@ def _build_active_bet_keyboard(bet: Dict[str, Any]) -> InlineKeyboardMarkup:
     rows: List[List[InlineKeyboardButton]] = []
     if first_row:
         rows.append(first_row)
-    rows.append([InlineKeyboardButton("🧮 Kalkulátor / Kalkulator", url=CALC_LINK)])
+    rows.append([InlineKeyboardButton("🧮 Kalkulátor / Kalkulator", url=_build_calculator_link(bet))])
     rows.append([InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj / Nemaš nalog? Registruj se", url=AFFILIATE_LINK)])
     return InlineKeyboardMarkup(rows)
 
@@ -601,6 +640,7 @@ def _build_active_bet_snapshot(bet: Dict[str, Any], bet_text: str) -> str:
         {
             "text": bet_text,
             "bet": bet,
+            "calculator_link": _build_calculator_link(bet),
         },
         sort_keys=True,
         default=str,
