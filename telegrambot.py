@@ -631,6 +631,18 @@ async def sync_supabase_bets_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     await sync_active_bets_for_all_users(context)
 
 
+async def refresh_and_sync_user_bets(
+    user_id: int,
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """Azonnali Supabase frissítés + az aktuálisan elérhető fogadások kiküldése egy usernek."""
+    bets = await asyncio.to_thread(_load_active_bets_from_supabase)
+    if bets is not None:
+        set_active_bets(bets)
+    await sync_active_bets_for_user(user_id=user_id, chat_id=chat_id, context=context)
+
+
 def build_selection_keyboard(selected: Set[str]) -> InlineKeyboardMarkup:
     rows: List[List[InlineKeyboardButton]] = []
     current_row: List[InlineKeyboardButton] = []
@@ -960,7 +972,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
         if query.message is not None:
             print(f"ℹ️ Kezdeti aktív fogadás szinkron indul (chat_id={query.message.chat.id}, selected={sorted(selected)}).")
-            await sync_active_bets_for_user(user_id=user_id, chat_id=query.message.chat.id, context=context)
+            await refresh_and_sync_user_bets(user_id=user_id, chat_id=query.message.chat.id, context=context)
         return
 
     await query.answer("Ismeretlen művelet.")
