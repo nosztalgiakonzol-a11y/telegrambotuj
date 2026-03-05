@@ -5,6 +5,8 @@
 - `/start`
 - `/irodak`
 - `/help`
+- `/kancelarije`
+- `/pomoc`
 
 ## Felhasználónak küldött chat üzenetek
 
@@ -16,7 +18,7 @@
 - Hibás kód esetén:
   - `❌ <b>GoldenTipsHungary</b>`
   - `Hibás aktivációs kód.`
-  - `Próbáld újra (teszt kód: <b>123</b>).`
+  - `Próbáld újra (teszt kód: <b>123</b>).` / `Pokušaj ponovo (test kod: <b>123</b>).`
 - Állapot-specifikus figyelmeztetések:
   - útmutató visszaigazolás hiánya
   - irodaválasztásra felszólítás
@@ -69,7 +71,7 @@ Template:
 - `Hozzáadva ✅`
 - `Maximum 6 irodát választhatsz.`
 - `Válassz legalább 2 irodát az arbitrázshoz.`
-- `GoldenTipsHungary tipp érkezik 🚀`
+- `GoldenTipsHungary tipp érkezik 🚀` / `GoldenTipsHungary tip stiže 🚀`
 - `Ismeretlen művelet.`
 
 ## Inline gombfeliratok
@@ -88,3 +90,8 @@ Template:
 ---
 
 > Megjegyzés: a `{...}` jelölések dinamikus mezők (adatbázis/config alapján).
+
+
+## Szerb fordítások
+
+A bot fő felhasználói üzenetei kétnyelvűek lettek (magyar + szerb), azonos jelentéssel.

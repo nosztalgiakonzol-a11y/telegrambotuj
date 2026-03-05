@@ -6,6 +6,8 @@ GoldenTipsHungary Telegram bot – összes felhasználói üzenet és parancs
 /start
 /irodak
 /help
+/kancelarije
+/pomoc
 
 2) Felhasználónak küldött chat üzenetek (reply_text / edit_message_text / send_message)
 ----------------------------------------------------------------------------------------
@@ -23,6 +25,7 @@ A) Indulás / aktiváció
   Hibás aktivációs kód.
 
   Próbáld újra (teszt kód: <b>123</b>).
+  Pokušaj ponovo (test kod: <b>123</b>).
 
 - Először nyisd meg az útmutatót, majd nyomd meg: <b>✅ Okés, elolvastam az útmutatót</b>.
 
@@ -92,7 +95,7 @@ F) /help válasz
 - Hozzáadva ✅
 - Maximum 6 irodát választhatsz.
 - Válassz legalább 2 irodát az arbitrázshoz.
-- GoldenTipsHungary tipp érkezik 🚀
+- GoldenTipsHungary tipp érkezik 🚀 / GoldenTipsHungary tip stiže 🚀
 - Ismeretlen művelet.
 
 4) Inline gombfeliratok (amit a user lát)
@@ -110,3 +113,13 @@ F) /help válasz
 
 Megjegyzés:
 - A dinamikus értékek ({...}) adatbázisból vagy konfigurációból töltődnek.
+
+
+5) Szerb fordítások
+-------------------
+A bot mostantól kétnyelvű (HU + SR) üzeneteket küld a fő flow-ban, beleértve:
+- aktivációs és hibaszövegek
+- irodaválasztási instrukciók
+- callback visszajelzések
+- no-bets értesítés
+- aktív fogadás template címkék

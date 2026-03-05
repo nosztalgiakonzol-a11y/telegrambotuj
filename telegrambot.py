@@ -230,6 +230,11 @@ def _log_warning(message: str) -> None:
     _log(message)
 
 
+def _bilingual_text(hu_text: str, sr_text: str) -> str:
+    """Return Hungarian + Serbian version of the same user-facing text."""
+    return f"{hu_text}\n\n🇷🇸 {sr_text}"
+
+
 def _extract_total_count_from_content_range(content_range: str) -> Optional[int]:
     if "/" not in content_range:
         return None
@@ -553,15 +558,15 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
         "🟢 <b>STÁTUSZ:</b> AKTÍV\n"
         f"📅 <b>Dátum:</b> {html.escape(match_date)} • ⏳\n\n"
         f"{book1['emoji']} <a href=\"{html.escape(book1_affiliate, quote=True)}\"><b>{book1_name}</b></a>\n"
-        f"<b>Mérkőzés:</b> <a href=\"{html.escape(match_link1, quote=True)}\">{match_name}</a>\n"
-        f"<b>Fogadás:</b> {option1}\n"
-        f"<b>Odds:</b> {odds1}\n\n"
+        f"<b>Mérkőzés / Meč:</b> <a href=\"{html.escape(match_link1, quote=True)}\">{match_name}</a>\n"
+        f"<b>Fogadás / Opklada:</b> {option1}\n"
+        f"<b>Odds / Kvota:</b> {odds1}\n\n"
         f"{book2['emoji']} <a href=\"{html.escape(book2_affiliate, quote=True)}\"><b>{book2_name}</b></a>\n"
-        f"<b>Mérkőzés:</b> <a href=\"{html.escape(match_link2, quote=True)}\">{match_name}</a>\n"
-        f"<b>Fogadás:</b> {option2}\n"
-        f"<b>Odds:</b> {odds2}\n\n"
+        f"<b>Mérkőzés / Meč:</b> <a href=\"{html.escape(match_link2, quote=True)}\">{match_name}</a>\n"
+        f"<b>Fogadás / Opklada:</b> {option2}\n"
+        f"<b>Odds / Kvota:</b> {odds2}\n\n"
         "━━━━━━━━━━━━━━━\n"
-        "⚙️ Szűrő módosítás: <b>/irodak</b>"
+        "⚙️ Szűrő módosítás / Izmena filtera: <b>/irodak / /kancelarije</b>"
     )
 
 
@@ -585,8 +590,8 @@ def _build_active_bet_keyboard(bet: Dict[str, Any]) -> InlineKeyboardMarkup:
     rows: List[List[InlineKeyboardButton]] = []
     if first_row:
         rows.append(first_row)
-    rows.append([InlineKeyboardButton("🧮 Kalkulátor", url=CALC_LINK)])
-    rows.append([InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj", url=AFFILIATE_LINK)])
+    rows.append([InlineKeyboardButton("🧮 Kalkulátor / Kalkulator", url=CALC_LINK)])
+    rows.append([InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj / Nemaš nalog? Registruj se", url=AFFILIATE_LINK)])
     return InlineKeyboardMarkup(rows)
 
 
@@ -651,10 +656,13 @@ async def sync_active_bets_for_user(
         if not bool(session.get("no_bets_notice_sent")):
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=(
+                text=_bilingual_text(
                     "ℹ️ <b>Jelenleg nincs elérhető fogadás</b> a kiválasztott irodapárosítással.\n\n"
                     "🔄 Adj hozzá több irodát a <b>/irodak</b> paranccsal, "
-                    "vagy várj, amíg új arbitrázs fogadás érkezik."
+                    "vagy várj, amíg új arbitrázs fogadás érkezik.",
+                    "ℹ️ <b>Trenutno nema dostupnih opklada</b> za izabrani par kladionica.\n\n"
+                    "🔄 Dodaj još kladionica komandom <b>/irodak ili /kancelarije</b>, "
+                    "ili sačekaj da stigne nova arbitražna opklada."
                 ),
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
@@ -848,43 +856,56 @@ def build_selection_keyboard(selected: Set[str]) -> InlineKeyboardMarkup:
     if current_row:
         rows.append(current_row)
 
-    rows.append([InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj", url=AFFILIATE_LINK)])
-    rows.append([InlineKeyboardButton("✅ Kész", callback_data="bm_done")])
+    rows.append([InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj / Nemaš nalog? Registruj se", url=AFFILIATE_LINK)])
+    rows.append([InlineKeyboardButton("✅ Kész / Gotovo", callback_data="bm_done")])
     return InlineKeyboardMarkup(rows)
 
 
 def build_guide_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("📘 Útmutató megnyitása", url=GUIDE_LINK)],
-            [InlineKeyboardButton("✅ Okés, elolvastam az útmutatót", callback_data="guide_done")],
+            [InlineKeyboardButton("📘 Útmutató / Uputstvo", url=GUIDE_LINK)],
+            [InlineKeyboardButton("✅ Elolvastam / Pročitao sam", callback_data="guide_done")],
         ]
     )
 
 
 def selection_text(selected: Set[str], is_edit_mode: bool = False) -> str:
     if not selected:
-        selected_list = "Még semmit nem választottál."
+        selected_list_hu = "Még semmit nem választottál."
+        selected_list_sr = "Još ništa nisi izabrao."
     else:
         pretty = []
         for bm in BOOKMAKERS:
             if bm["key"] in selected:
                 pretty.append(f"{bm['emoji']} {bm['name']}")
-        selected_list = "\n".join(pretty)
+        selected_list_hu = "\n".join(pretty)
+        selected_list_sr = selected_list_hu
 
     if is_edit_mode:
-        header = "⚙️ <b>GoldenTipsHungary</b> • Szűrők módosítása"
+        header_hu = "⚙️ <b>GoldenTipsHungary</b> • Szűrők módosítása"
+        header_sr = "⚙️ <b>GoldenTipsHungary</b> • Izmena filtera"
     else:
-        header = "✅ <b>GoldenTipsHungary</b> • Aktiváció sikeres"
+        header_hu = "✅ <b>GoldenTipsHungary</b> • Aktiváció sikeres"
+        header_sr = "✅ <b>GoldenTipsHungary</b> • Aktivacija uspešna"
 
-    return (
-        f"{header}\n\n"
+    hu = (
+        f"{header_hu}\n\n"
         "Add meg, mely irodáknál vagy regisztrálva\n"
         "(többet is kiválaszthatsz, de maximum 6-ot), majd nyomd meg a <b>✅ Kész</b> gombot.\n\n"
         f"💰 Nincs fiókod valamelyik irodánál? <a href=\"{AFFILIATE_LINK}\"><b>Itt tudsz regisztrálni</b></a>.\n\n"
         f"📘 Ha valami nem tiszta, <a href=\"{GUIDE_LINK}\"><b>olvasd el az útmutatót</b></a>.\n\n"
-        f"<b>Kiválasztott irodák:</b>\n{selected_list}"
+        f"<b>Kiválasztott irodák:</b>\n{selected_list_hu}"
     )
+    sr = (
+        f"{header_sr}\n\n"
+        "Izaberi kod kojih kladionica si registrovan\n"
+        "(možeš izabrati više, ali najviše 6), pa klikni na dugme <b>✅ Kész</b>.\n\n"
+        f"💰 Nemaš nalog kod neke kladionice? <a href=\"{AFFILIATE_LINK}\"><b>Registruj se ovde</b></a>.\n\n"
+        f"📘 Ako nešto nije jasno, <a href=\"{GUIDE_LINK}\"><b>pročitaj uputstvo</b></a>.\n\n"
+        f"<b>Izabrane kladionice:</b>\n{selected_list_sr}"
+    )
+    return _bilingual_text(hu, sr)
 
 
 def build_demo_bet_text(book1: dict, book2: dict) -> str:
@@ -894,15 +915,15 @@ def build_demo_bet_text(book1: dict, book2: dict) -> str:
         "🟢 <b>STÁTUSZ:</b> AKTÍV\n"
         "📅 <b>Dátum:</b> Április 6, 14:00 • ⏳ <code>2 órán múlva</code>\n\n"
         f"{book1['emoji']} <a href=\"{book1['url']}\"><b>{book1['name']}</b></a>\n"
-        f"<b>Mérkőzés:</b> <a href=\"{MATCH_LINK}\">Ferencváros - Újpest</a>\n"
-        "<b>Fogadás:</b> Kevesebb mint -> 2.5 - Gólok\n"
-        "<b>Odds:</b> 1.95\n\n"
+        f"<b>Mérkőzés / Meč:</b> <a href=\"{MATCH_LINK}\">Ferencváros - Újpest</a>\n"
+        "<b>Fogadás / Opklada:</b> Kevesebb mint -> 2.5 - Gólok\n"
+        "<b>Odds / Kvota:</b> 1.95\n\n"
         f"{book2['emoji']} <a href=\"{book2['url']}\"><b>{book2['name']}</b></a>\n"
-        f"<b>Mérkőzés:</b> <a href=\"{MATCH_LINK}\">Ferencváros - Újpest</a>\n"
-        "<b>Fogadás:</b> Több mint -> 2.5 - Gólok\n"
-        "<b>Odds:</b> 2.47\n\n"
+        f"<b>Mérkőzés / Meč:</b> <a href=\"{MATCH_LINK}\">Ferencváros - Újpest</a>\n"
+        "<b>Fogadás / Opklada:</b> Több mint -> 2.5 - Gólok\n"
+        "<b>Odds / Kvota:</b> 2.47\n\n"
         "━━━━━━━━━━━━━━━\n"
-        "⚙️ Szűrő módosítás: <b>/irodak</b>"
+        "⚙️ Szűrő módosítás / Izmena filtera: <b>/irodak / /kancelarije</b>"
     )
 
 
@@ -916,10 +937,10 @@ def build_demo_bet_keyboard(book1: dict, book2: dict) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(f"{book2['emoji']} {book2['name']}", url=book2["url"]),
             ],
             [
-                InlineKeyboardButton("🧮 Kalkulátor", url=CALC_LINK),
+                InlineKeyboardButton("🧮 Kalkulátor / Kalkulator", url=CALC_LINK),
             ],
             [
-                InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj", url=AFFILIATE_LINK),
+                InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj / Nemaš nalog? Registruj se", url=AFFILIATE_LINK),
             ],
         ]
     )
@@ -950,8 +971,12 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     _persist_message_state(force=True)
 
     await update.message.reply_text(
-        "👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>\n\n"
-        "Kérlek add meg a vásárláshoz kapott <b>aktivációs kódodat</b> az induláshoz.",
+        _bilingual_text(
+            "👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>\n\n"
+            "Kérlek add meg a vásárláshoz kapott <b>aktivációs kódodat</b> az induláshoz.",
+            "👋 <b>Dobrodošao u GoldenTipsHungary sistem!</b>\n\n"
+            "Unesi svoj <b>aktivacioni kod</b> koji si dobio kupovinom."
+        ),
         parse_mode=ParseMode.HTML,
     )
 
@@ -969,7 +994,7 @@ async def filters_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if not session.get("activated"):
         await update.message.reply_text(
-            "Először aktiváld a fiókodat a /start paranccsal.",
+            _bilingual_text("Először aktiváld a fiókodat a /start paranccsal.", "Prvo aktiviraj nalog komandom /start."),
             parse_mode=ParseMode.HTML,
         )
         return
@@ -1041,19 +1066,22 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     if state == "awaiting_guide":
         await update.message.reply_text(
-            "Először nyisd meg az útmutatót, majd nyomd meg: <b>✅ Okés, elolvastam az útmutatót</b>.",
+            _bilingual_text(
+                "Először nyisd meg az útmutatót, majd nyomd meg: <b>✅ Okés, elolvastam az útmutatót</b>.",
+                "Prvo otvori uputstvo, zatim klikni: <b>✅ U redu, pročitao sam uputstvo</b>."
+            ),
             parse_mode=ParseMode.HTML,
         )
         return
 
     if state == "selecting_books":
         await update.message.reply_text(
-            "👆 Válassz az inline gombokkal, majd nyomd meg a <b>✅ Kész</b> gombot.",
+            _bilingual_text("👆 Válassz az inline gombokkal, majd nyomd meg a <b>✅ Kész</b> gombot.", "👆 Izaberi pomoću inline dugmadi, zatim klikni na <b>✅ Kész</b>."),
             parse_mode=ParseMode.HTML,
         )
         return
 
-    await update.message.reply_text("Írd be: /start (újrakezdéshez)")
+    await update.message.reply_text(_bilingual_text("Írd be: /start (újrakezdéshez)", "Ukucaj: /start (za restart)"))
 
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1073,15 +1101,15 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if data == "guide_done":
         if session.get("state") != "awaiting_guide":
-            await query.answer("Először /start és aktivációs kód szükséges.", show_alert=True)
+            await query.answer(_bilingual_text("Először /start és aktivációs kód szükséges.", "Prvo su potrebni /start i aktivacioni kod."), show_alert=True)
             return
 
         session["state"] = "selecting_books"
         selected: Set[str] = session["selected"]  # type: ignore
 
-        await query.answer("Szuper! Jöhetnek a kiválasztott irodák ✅")
+        await query.answer(_bilingual_text("Szuper! Jöhetnek a kiválasztott irodák ✅", "Super! Sada izaberi kladionice ✅"))
         await query.edit_message_text(
-            text="✅ Útmutató visszaigazolva.",
+            text=_bilingual_text("✅ Útmutató visszaigazolva.", "✅ Uputstvo potvrđeno."),
             parse_mode=ParseMode.HTML,
         )
         if query.message is not None:
@@ -1095,17 +1123,17 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     if session.get("state") not in {"selecting_books", "ready"}:
-        await query.answer("Először /start és aktivációs kód szükséges.", show_alert=True)
+        await query.answer(_bilingual_text("Először /start és aktivációs kód szükséges.", "Prvo su potrebni /start i aktivacioni kod."), show_alert=True)
         return
 
     if data == "open_filters":
         if not session.get("activated"):
-            await query.answer("Először /start és aktivációs kód szükséges.", show_alert=True)
+            await query.answer(_bilingual_text("Először /start és aktivációs kód szükséges.", "Prvo su potrebni /start i aktivacioni kod."), show_alert=True)
             return
 
         session["state"] = "selecting_books"
         session["receive_bets"] = False
-        await query.answer("Szűrőmódosítás megnyitva ⚙️")
+        await query.answer(_bilingual_text("Szűrőmódosítás megnyitva ⚙️", "Izmena filtera otvorena ⚙️"))
         await query.edit_message_text(
             text=selection_text(selected, is_edit_mode=True),
             parse_mode=ParseMode.HTML,
@@ -1116,18 +1144,18 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if data.startswith("bm:"):
         key = data.split(":", 1)[1]
         if key not in BOOKMAKER_BY_KEY:
-            await query.answer("Ismeretlen iroda.", show_alert=True)
+            await query.answer(_bilingual_text("Ismeretlen iroda.", "Nepoznata kladionica."), show_alert=True)
             return
 
         if key in selected:
             selected.remove(key)
-            await query.answer("Eltávolítva ✅")
+            await query.answer(_bilingual_text("Eltávolítva ✅", "Uklonjeno ✅"))
         else:
             if len(selected) >= MAX_SELECTED_BOOKMAKERS:
                 await query.answer(f"Maximum {MAX_SELECTED_BOOKMAKERS} irodát választhatsz.", show_alert=True)
                 return
             selected.add(key)
-            await query.answer("Hozzáadva ✅")
+            await query.answer(_bilingual_text("Hozzáadva ✅", "Dodato ✅"))
 
         await query.edit_message_text(
             text=selection_text(selected),
@@ -1138,7 +1166,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if data == "bm_done":
         if len(selected) < 2:
-            await query.answer("Válassz legalább 2 irodát az arbitrázshoz.", show_alert=True)
+            await query.answer(_bilingual_text("Válassz legalább 2 irodát az arbitrázshoz.", "Izaberi najmanje 2 kladionice za arbitražu."), show_alert=True)
             return
         if len(selected) > MAX_SELECTED_BOOKMAKERS:
             await query.answer(f"Maximum {MAX_SELECTED_BOOKMAKERS} irodát választhatsz.", show_alert=True)
@@ -1152,15 +1180,20 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         _mark_message_state_dirty()
         _persist_message_state(force=True)
 
-        await query.answer("GoldenTipsHungary tipp érkezik 🚀")
+        await query.answer(_bilingual_text("GoldenTipsHungary tipp érkezik 🚀", "GoldenTipsHungary tip stiže 🚀"))
 
         await query.edit_message_text(
-            text=(
+            text=_bilingual_text(
                 "✅ <b>GoldenTipsHungary</b>\n"
                 "Irodák elmentve!\n\n"
                 "Ha módosítanád, hogy melyik irodákról kapj értesítést, írd be a chatbe: <b>/irodak</b>\n"
                 f"📘 Útmutató: <a href=\"{GUIDE_LINK}\"><b>Itt tudod elolvasni</b></a>.\n\n"
-                "Küldöm a jelenleg aktív fogadásokat..."
+                "Küldöm a jelenleg aktív fogadásokat...",
+                "✅ <b>GoldenTipsHungary</b>\n"
+                "Kladionice su sačuvane!\n\n"
+                "Ako želiš da izmeniš sa kojih kladionica primaš obaveštenja, pošalji: <b>/irodak ili /kancelarije</b>\n"
+                f"📘 Uputstvo: <a href=\"{GUIDE_LINK}\"><b>Pročitaj ovde</b></a>.\n\n"
+                "Šaljem trenutno aktivne opklade..."
             ),
             parse_mode=ParseMode.HTML,
         )
@@ -1170,7 +1203,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await refresh_and_sync_user_bets(user_id=user_id, chat_id=query.message.chat.id, context=context)
         return
 
-    await query.answer("Ismeretlen művelet.")
+    await query.answer(_bilingual_text("Ismeretlen művelet.", "Nepoznata radnja."))
 
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1193,7 +1226,9 @@ def main() -> None:
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("irodak", filters_handler))
+    app.add_handler(CommandHandler("kancelarije", filters_handler))
     app.add_handler(CommandHandler("help", help_handler))
+    app.add_handler(CommandHandler("pomoc", help_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
