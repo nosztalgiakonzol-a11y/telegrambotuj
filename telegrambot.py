@@ -362,8 +362,6 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
         return ""
 
     external_text = str(bet.get("text", "")).strip()
-    if external_text:
-        return external_text
 
     book1_source = _get_bet_bookmaker_value(bet, "book1_key", "bookmaker1")
     book2_source = _get_bet_bookmaker_value(bet, "book2_key", "bookmaker2")
@@ -371,7 +369,7 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
     book1 = BOOKMAKER_BY_KEY.get(_resolve_bookmaker_key(book1_source))
     book2 = BOOKMAKER_BY_KEY.get(_resolve_bookmaker_key(book2_source))
     if not book1 or not book2:
-        return ""
+        return external_text
 
     profit_value = _get_bet_field_value(bet, "profit_percent")
     if profit_value is None:
