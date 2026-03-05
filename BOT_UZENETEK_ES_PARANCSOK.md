@@ -5,8 +5,6 @@
 - `/start`
 - `/irodak`
 - `/help`
-- `/kancelarije`
-- `/pomoc`
 
 ## Felhasználónak küldött chat üzenetek
 
@@ -94,4 +92,4 @@ Template:
 
 ## Szerb fordítások
 
-A bot fő felhasználói üzenetei kétnyelvűek lettek (magyar + szerb), azonos jelentéssel.
+A szerb fordítások jelenleg a kódban eltárolva maradnak, de futás közben nem aktívak (a bot most magyar szövegeket küld).

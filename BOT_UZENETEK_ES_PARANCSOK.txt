@@ -6,8 +6,6 @@ GoldenTipsHungary Telegram bot – összes felhasználói üzenet és parancs
 /start
 /irodak
 /help
-/kancelarije
-/pomoc
 
 2) Felhasználónak küldött chat üzenetek (reply_text / edit_message_text / send_message)
 ----------------------------------------------------------------------------------------
@@ -117,9 +115,4 @@ Megjegyzés:
 
 5) Szerb fordítások
 -------------------
-A bot mostantól kétnyelvű (HU + SR) üzeneteket küld a fő flow-ban, beleértve:
-- aktivációs és hibaszövegek
-- irodaválasztási instrukciók
-- callback visszajelzések
-- no-bets értesítés
-- aktív fogadás template címkék
+A szerb fordítások jelenleg a kódban eltárolva maradnak, de futás közben nem aktívak (a bot most magyar szövegeket küld).
