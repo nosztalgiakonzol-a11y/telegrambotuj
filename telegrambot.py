@@ -38,7 +38,13 @@ SUPABASE_KEY = (
     os.getenv("SUPABASE_KEY")
     or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     or os.getenv("SUPABASE_ANON_KEY")
-    or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvbnVkZ3l5dnhuY2RjZ2FucHBsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMzA5NDMsImV4cCI6MjA3NTYwNjk0M30.QhtBEhUYoZU8dukJ2bNcy95bXW7unxln8NPe_13eBQ4"
+    or ""
+).strip()
+SUPABASE_READ_KEY = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    or os.getenv("SUPABASE_KEY")
+    or os.getenv("SUPABASE_ANON_KEY")
+    or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvbnVkZ3l5dnhuY2RjZ2FucHBsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDAzMDk0MywiZXhwIjoyMDc1NjA2OTQzfQ.6mmHZJ2QS3a4TywxZ-lswdcvwPCF5NCYLe6CuiO8-3A"
 ).strip()
 SUPABASE_BETS_TABLE = os.getenv("SUPABASE_BETS_TABLE", "tips").strip() or "tips"
 BOT_LOG_FILE = os.getenv("BOT_LOG_FILE", "").strip()
@@ -563,13 +569,13 @@ async def sync_active_bets_for_all_users(context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 def _supabase_configured() -> bool:
-    return bool(SUPABASE_URL and SUPABASE_KEY and SUPABASE_BETS_TABLE)
+    return bool(SUPABASE_URL and SUPABASE_READ_KEY and SUPABASE_BETS_TABLE)
 
 
 def _load_active_bets_from_supabase() -> Optional[List[Dict[str, Any]]]:
     global SUPABASE_LAST_SYNC_SUMMARY
     if not _supabase_configured():
-        SUPABASE_LAST_SYNC_SUMMARY = "SUPABASE_URL/SUPABASE_KEY/SUPABASE_BETS_TABLE nincs teljesen beállítva"
+        SUPABASE_LAST_SYNC_SUMMARY = "SUPABASE_URL/SUPABASE_READ_KEY/SUPABASE_BETS_TABLE nincs teljesen beállítva"
         _log_warning(f"⚠️ Supabase sync kihagyva: {SUPABASE_LAST_SYNC_SUMMARY}.")
         return None
 
@@ -578,8 +584,8 @@ def _load_active_bets_from_supabase() -> Optional[List[Dict[str, Any]]]:
     req = urllib_request.Request(
         url,
         headers={
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "apikey": SUPABASE_READ_KEY,
+            "Authorization": f"Bearer {SUPABASE_READ_KEY}",
             "Accept": "application/json",
             "Prefer": "count=exact",
         },
@@ -999,8 +1005,7 @@ async def supabase_requirements_handler(update: Update, context: ContextTypes.DE
     await update.message.reply_text(
         "Supabase bekötéshez ezek kellenek:\n"
         "- SUPABASE_URL\n"
-        "- SUPABASE_KEY vagy SUPABASE_ANON_KEY (olvasási jogosultsággal)\n"
-        "- opcionálisan: SUPABASE_SERVICE_ROLE_KEY (csak szerver oldali env-ben)\n"
+        "- SUPABASE_SERVICE_ROLE_KEY (ajánlott szerver oldali olvasáshoz)\n- SUPABASE_KEY vagy SUPABASE_ANON_KEY (fallback)\n"
         "- SUPABASE_BETS_TABLE (alapértelmezett: tips)\n"
         "- SUPABASE_QUERY_LIMIT (alapértelmezett: 100, maximum: 1000)\n"
         "- SUPABASE_SYNC_INTERVAL_SECONDS (alapértelmezett: 35, minimum: 5)\n\n"
