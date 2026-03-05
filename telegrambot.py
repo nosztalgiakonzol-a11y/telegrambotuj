@@ -4,6 +4,7 @@ import asyncio
 import html
 import json
 import os
+import time
 from datetime import datetime, timezone
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
@@ -56,6 +57,10 @@ try:
     SUPABASE_QUERY_LIMIT = min(1000, max(1, int(os.getenv("SUPABASE_QUERY_LIMIT", "100"))))
 except ValueError:
     SUPABASE_QUERY_LIMIT = 100
+try:
+    MESSAGE_STATE_FLUSH_INTERVAL_SECONDS = max(1, int(os.getenv("MESSAGE_STATE_FLUSH_INTERVAL_SECONDS", "5")))
+except ValueError:
+    MESSAGE_STATE_FLUSH_INTERVAL_SECONDS = 5
 
 # Bookmaker lista (a kért nevekkel)
 BOOKMAKERS = [
@@ -308,7 +313,20 @@ def _load_persisted_message_state() -> Dict[int, Dict[str, Dict[str, Any]]]:
     return restored
 
 
-def _persist_message_state() -> None:
+def _mark_message_state_dirty() -> None:
+    global MESSAGE_STATE_DIRTY
+    MESSAGE_STATE_DIRTY = True
+
+
+def _persist_message_state(force: bool = False) -> None:
+    global MESSAGE_STATE_DIRTY, LAST_MESSAGE_STATE_FLUSH_TS
+    now_ts = time.time()
+    if not force:
+        if not MESSAGE_STATE_DIRTY:
+            return
+        if now_ts - LAST_MESSAGE_STATE_FLUSH_TS < MESSAGE_STATE_FLUSH_INTERVAL_SECONDS:
+            return
+
     payload: Dict[str, Dict[str, Dict[str, Any]]] = {}
     for user_id, session in USER_SESSIONS.items():
         payload[str(user_id)] = {
@@ -316,6 +334,8 @@ def _persist_message_state() -> None:
             "active_bet_snapshots": dict(session.get("active_bet_snapshots", {})),
         }
     _safe_write_json(MESSAGE_STATE_FILE, payload)
+    MESSAGE_STATE_DIRTY = False
+    LAST_MESSAGE_STATE_FLUSH_TS = now_ts
 
 
 def _compute_bet_diff(active_bets: List[Dict[str, Any]]) -> Tuple[int, int, int, Dict[str, str]]:
@@ -346,6 +366,8 @@ SUPABASE_LAST_SYNC_SUMMARY = "n/a"
 BETS_SNAPSHOT_FILE = os.getenv("BETS_SNAPSHOT_FILE", "bets_snapshot.txt").strip() or "bets_snapshot.txt"
 MESSAGE_STATE_FILE = os.getenv("MESSAGE_STATE_FILE", "message_state.txt").strip() or "message_state.txt"
 LAST_BET_SNAPSHOTS: Dict[str, str] = {}
+MESSAGE_STATE_DIRTY = False
+LAST_MESSAGE_STATE_FLUSH_TS = 0.0
 
 # Demo session tárolás memóriában (újraindítás után törlődik)
 USER_SESSIONS: Dict[int, Dict[str, object]] = {}
@@ -583,7 +605,7 @@ async def sync_active_bets_for_user(
     user_id: int,
     chat_id: int,
     context: ContextTypes.DEFAULT_TYPE,
-) -> None:
+) -> bool:
     """
     Azonnali aktív fogadás szinkron:
     - új aktív fogadások kiküldése
@@ -591,11 +613,12 @@ async def sync_active_bets_for_user(
     """
     session = get_session(user_id)
     if not user_can_receive_bets(user_id):
-        return
+        return False
 
     selected: Set[str] = session["selected"]  # type: ignore
     sent_message_ids: Dict[str, int] = session["active_bet_messages"]  # type: ignore
     sent_snapshots: Dict[str, str] = session["active_bet_snapshots"]  # type: ignore
+    state_changed = False
 
     visible_bets: Dict[str, Dict[str, Any]] = {}
     selected_match_count = 0
@@ -645,6 +668,7 @@ async def sync_active_bets_for_user(
                     disable_web_page_preview=True,
                 )
                 sent_snapshots[bet_id] = bet_snapshot
+                state_changed = True
                 _log_info(f"✏️ Fogadás frissítve (chat_id={chat_id}, bet_id={bet_id}).")
                 continue
             except TelegramError as exc:
@@ -656,6 +680,7 @@ async def sync_active_bets_for_user(
                     except Exception:
                         pass
                 sent_snapshots.pop(bet_id, None)
+                state_changed = True
 
         message = await context.bot.send_message(
             chat_id=chat_id,
@@ -666,6 +691,7 @@ async def sync_active_bets_for_user(
         )
         sent_message_ids[bet_id] = message.message_id
         sent_snapshots[bet_id] = bet_snapshot
+        state_changed = True
         _log_info(f"📨 Új fogadás kiküldve (chat_id={chat_id}, bet_id={bet_id}, message_id={message.message_id}).")
 
     # Már nem aktív fogadások eltüntetése (üzenet törlés)
@@ -673,6 +699,7 @@ async def sync_active_bets_for_user(
     for stale_id in stale_ids:
         message_id = sent_message_ids.pop(stale_id, None)
         sent_snapshots.pop(stale_id, None)
+        state_changed = True
         if message_id is None:
             continue
         try:
@@ -682,14 +709,21 @@ async def sync_active_bets_for_user(
             # Üzenet már törölve / nem törölhető - ilyenkor csak lokális cache-ből vesszük ki.
             pass
 
-    _persist_message_state()
+    if state_changed:
+        _mark_message_state_dirty()
+    return state_changed
 
 
 async def sync_active_bets_for_all_users(context: ContextTypes.DEFAULT_TYPE) -> None:
+    any_changes = False
     for user_id, session in USER_SESSIONS.items():
         if not bool(session.get("activated") and session.get("receive_bets")):
             continue
-        await sync_active_bets_for_user(user_id=user_id, chat_id=user_id, context=context)
+        user_changed = await sync_active_bets_for_user(user_id=user_id, chat_id=user_id, context=context)
+        any_changes = any_changes or user_changed
+
+    if any_changes:
+        _persist_message_state()
 
 
 def _supabase_configured() -> bool:
@@ -759,6 +793,7 @@ async def sync_supabase_bets_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     set_active_bets(bets)
     await sync_active_bets_for_all_users(context)
+    _persist_message_state()
 
 
 async def refresh_and_sync_user_bets(
@@ -770,7 +805,9 @@ async def refresh_and_sync_user_bets(
     bets = await asyncio.to_thread(_load_active_bets_from_supabase)
     if bets is not None:
         set_active_bets(bets)
-    await sync_active_bets_for_user(user_id=user_id, chat_id=chat_id, context=context)
+    user_changed = await sync_active_bets_for_user(user_id=user_id, chat_id=chat_id, context=context)
+    if user_changed:
+        _persist_message_state(force=True)
 
 
 def build_selection_keyboard(selected: Set[str]) -> InlineKeyboardMarkup:
@@ -889,7 +926,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "active_bet_messages": {},
         "active_bet_snapshots": {},
     }
-    _persist_message_state()
+    _mark_message_state_dirty()
+    _persist_message_state(force=True)
 
     await update.message.reply_text(
         "👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>\n\n"
@@ -954,7 +992,8 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     "active_bet_messages": {},
                     "active_bet_snapshots": {},
                 }
-                _persist_message_state()
+                _mark_message_state_dirty()
+                _persist_message_state(force=True)
 
             session["activated"] = True
             session["state"] = "awaiting_guide"
@@ -1088,7 +1127,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         session["receive_bets"] = True
         session["active_bet_messages"] = {}
         session["active_bet_snapshots"] = {}
-        _persist_message_state()
+        _mark_message_state_dirty()
+        _persist_message_state(force=True)
 
         await query.answer("GoldenTipsHungary demo tipp érkezik 🚀")
 
