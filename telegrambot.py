@@ -64,16 +64,16 @@ except ValueError:
 
 # Bookmaker lista (a kért nevekkel)
 BOOKMAKERS = [
-    {"key": "maxbet", "name": "MaxBet", "emoji": "🔥", "url": "https://maxbet.com/"},
-    {"key": "mozzartbet", "name": "Mozzartbet", "emoji": "💸", "url": "https://www.mozzartbet.com/"},
-    {"key": "admiralbet", "name": "AdmiralBet", "emoji": "🎯", "url": "https://admiralbet.com/"},
-    {"key": "meridian", "name": "Meridian", "emoji": "🟣", "url": "https://meridianbet.com/"},
-    {"key": "superbet", "name": "Superbet", "emoji": "🏅", "url": "https://superbet.com/"},
-    {"key": "rabona", "name": "Rabona", "emoji": "🟡", "url": "https://rabona.com/"},
-    {"key": "megapari", "name": "Megapari", "emoji": "🔵", "url": "https://megapari.com/"},
-    {"key": "funbet", "name": "Funbet", "emoji": "⚫", "url": "https://funbet.com/"},
-    {"key": "20bet", "name": "20bet", "emoji": "🟢", "url": "https://20bet.com/"},
-    {"key": "mostbet", "name": "MostBet", "emoji": "🟠", "url": "https://mostbet.com/"},
+    {"key": "maxbet", "name": "MaxBet", "emoji": "🔥", "url": "https://www.maxbet.rs/sr/registracija"},
+    {"key": "mozzartbet", "name": "Mozzartbet", "emoji": "💸", "url": "https://www.mozzartbet.com/rs/registration"},
+    {"key": "admiralbet", "name": "AdmiralBet", "emoji": "🎯", "url": "https://admiralbet.rs/registration"},
+    {"key": "meridian", "name": "Meridian", "emoji": "🟣", "url": "https://meridianbet.rs/sr/registracija"},
+    {"key": "superbet", "name": "Superbet", "emoji": "🏅", "url": "https://superbet.rs/registracija"},
+    {"key": "rabona", "name": "Rabona", "emoji": "🟡", "url": "https://rabona.com/registration"},
+    {"key": "megapari", "name": "Megapari", "emoji": "🔵", "url": "https://megapari.com/registration"},
+    {"key": "funbet", "name": "Frumzi", "emoji": "⚫", "url": "https://frumzi.com"},
+    {"key": "20bet", "name": "20bet", "emoji": "🟢", "url": "https://20bet.com/registration"},
+    {"key": "mostbet", "name": "MostBet", "emoji": "🟠", "url": "https://mostbet.com"},
 ]
 
 BOOKMAKER_BY_KEY = {b["key"]: b for b in BOOKMAKERS}
