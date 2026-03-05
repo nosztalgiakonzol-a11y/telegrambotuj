@@ -84,6 +84,7 @@ for _bookmaker in BOOKMAKERS:
     BOOKMAKER_KEY_BY_NORMALIZED_VALUE[_normalize_bookmaker_value(_bookmaker["key"])] = _bookmaker["key"]
     BOOKMAKER_KEY_BY_NORMALIZED_VALUE[_normalize_bookmaker_value(_bookmaker["name"])] = _bookmaker["key"]
 BOOKMAKER_KEY_BY_NORMALIZED_VALUE["ivibet"] = "20bet"
+BOOKMAKER_KEY_BY_NORMALIZED_VALUE["mozzart"] = "mozzartbet"
 MAX_SELECTED_BOOKMAKERS = 6
 BOOKMAKER_FIELD_ALIASES = {
     "book1_key": ("book_1_key", "book1", "book_1", "bookmaker_1"),
