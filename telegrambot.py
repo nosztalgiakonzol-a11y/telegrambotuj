@@ -31,6 +31,7 @@ MATCH_LINK = "https://sajatoldalad.hu/meccs"
 CALC_LINK = "https://arbify-bet.hu/calculator"
 CALC_DYNAMIC_BASE_URL = os.getenv("CALC_DYNAMIC_BASE_URL", "https://arbify-bet.hu/calculator").strip() or "https://arbify-bet.hu/calculator"
 CALC_DEFAULT_STAKE = os.getenv("CALC_DEFAULT_STAKE", "14950").strip() or "14950"
+BOOKMAKER_LINKS_FILE = os.getenv("BOOKMAKER_LINKS_FILE", "bookmaker_links.json").strip() or "bookmaker_links.json"
 AFFILIATE_LINK = "https://arbify-bet.hu/register?lang=rs"
 GUIDE_LINK = "https://arbify-bet.hu/tutorial-sr"
 
@@ -277,6 +278,56 @@ def _safe_write_json(path: str, payload: Any) -> None:
         _log_warning(f"⚠️ Nem sikerült állapotfájlt írni ({path}): {exc}")
 
 
+def _load_bookmaker_link_overrides_if_changed() -> None:
+    global BOOKMAKER_LINK_OVERRIDES, BOOKMAKER_LINKS_FILE_MTIME
+
+    path = BOOKMAKER_LINKS_FILE
+    if not path:
+        return
+
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        if BOOKMAKER_LINK_OVERRIDES:
+            BOOKMAKER_LINK_OVERRIDES = {}
+            BOOKMAKER_LINKS_FILE_MTIME = -1.0
+            _log_info("ℹ️ bookmakerek külső link-fájlja nem elérhető, visszaállás alap linkekre.")
+        return
+
+    if mtime == BOOKMAKER_LINKS_FILE_MTIME:
+        return
+
+    raw = _safe_read_json(path, {})
+    if not isinstance(raw, dict):
+        _log_warning(f"⚠️ Érvénytelen bookmaker link fájl formátum: {path} (objektum/dict szükséges).")
+        BOOKMAKER_LINKS_FILE_MTIME = mtime
+        return
+
+    loaded: Dict[str, str] = {}
+    for key, value in raw.items():
+        resolved_key = _resolve_bookmaker_key(key)
+        if not resolved_key:
+            continue
+        safe = _safe_url(value)
+        if safe:
+            loaded[resolved_key] = safe
+
+    BOOKMAKER_LINK_OVERRIDES = loaded
+    BOOKMAKER_LINKS_FILE_MTIME = mtime
+    _log_info(f"ℹ️ Bookmaker link overrides betöltve: {len(loaded)} elem ({path}).")
+
+
+def _get_runtime_bookmaker_url(bookmaker: Optional[Dict[str, Any]]) -> str:
+    _load_bookmaker_link_overrides_if_changed()
+    if bookmaker is None:
+        return ""
+    key = str(bookmaker.get("key") or "").strip()
+    override = _safe_url(BOOKMAKER_LINK_OVERRIDES.get(key, ""))
+    if override:
+        return override
+    return _safe_url(bookmaker.get("url", ""))
+
+
 def _bet_snapshot_payload(bet: Dict[str, Any]) -> str:
     return json.dumps(bet, sort_keys=True, default=str)
 
@@ -385,6 +436,8 @@ LAST_MESSAGE_STATE_FLUSH_TS = 0.0
 # Demo session tárolás memóriában (újraindítás után törlődik)
 USER_SESSIONS: Dict[int, Dict[str, object]] = {}
 USER_SYNC_LOCKS: Dict[int, asyncio.Lock] = {}
+BOOKMAKER_LINK_OVERRIDES: Dict[str, str] = {}
+BOOKMAKER_LINKS_FILE_MTIME: float = -1.0
 
 
 @dataclass
@@ -567,14 +620,14 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
     book1_name = html.escape(str(bet.get("bookmaker1") or book1.get("name", "Bookmaker 1")).strip())
     book2_name = html.escape(str(bet.get("bookmaker2") or book2.get("name", "Bookmaker 2")).strip())
     # A fogadóiroda neve mindig a fix, irodához tartozó regisztrációs linkre mutasson.
-    book1_affiliate = _safe_url(book1.get("url", ""))
-    book2_affiliate = _safe_url(book2.get("url", ""))
+    book1_affiliate = _get_runtime_bookmaker_url(book1)
+    book2_affiliate = _get_runtime_bookmaker_url(book2)
     match_link1 = _safe_url(bet.get("original_link1") or bet.get("quick_link_url") or MATCH_LINK)
     match_link2 = _safe_url(bet.get("original_link2") or bet.get("quick_link_url") or MATCH_LINK)
     if not book1_affiliate:
-        book1_affiliate = _safe_url(book1.get("url", "")) or _safe_url(MATCH_LINK)
+        book1_affiliate = _get_runtime_bookmaker_url(book1) or _safe_url(MATCH_LINK)
     if not book2_affiliate:
-        book2_affiliate = _safe_url(book2.get("url", "")) or _safe_url(MATCH_LINK)
+        book2_affiliate = _get_runtime_bookmaker_url(book2) or _safe_url(MATCH_LINK)
     if not match_link1:
         match_link1 = _safe_url(MATCH_LINK)
     if not match_link2:
@@ -1277,7 +1330,8 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(
         "/start - GoldenTipsHungary flow indítása\n"
         "/irodak - szűrt irodák módosítása\n"
-        "/help - segítség"
+        "/help - segítség\n"
+        "/linkreload - bookmaker linkek újratöltése"
     )
 
 
@@ -1327,6 +1381,18 @@ def _send_startup_restart_notice_sync() -> None:
 
 
 
+async def links_reload_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.message is None:
+        return
+
+    # Force refresh on next read
+    global BOOKMAKER_LINKS_FILE_MTIME
+    BOOKMAKER_LINKS_FILE_MTIME = -1.0
+    _load_bookmaker_link_overrides_if_changed()
+    await update.message.reply_text(
+        f"🔄 Bookmaker linkek újratöltve. Aktív override elemek: {len(BOOKMAKER_LINK_OVERRIDES)}"
+    )
+
 
 # =========================
 # MAIN
@@ -1337,6 +1403,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("irodak", filters_handler))
     app.add_handler(CommandHandler("help", help_handler))
+    app.add_handler(CommandHandler("linkreload", links_reload_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
