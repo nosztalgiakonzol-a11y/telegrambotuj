@@ -384,6 +384,7 @@ LAST_MESSAGE_STATE_FLUSH_TS = 0.0
 
 # Demo session tárolás memóriában (újraindítás után törlődik)
 USER_SESSIONS: Dict[int, Dict[str, object]] = {}
+USER_SYNC_LOCKS: Dict[int, asyncio.Lock] = {}
 
 
 @dataclass
@@ -461,6 +462,29 @@ def get_session(user_id: int) -> Dict[str, object]:
             "no_bets_notice_sent": False,
         }
     return USER_SESSIONS[user_id]
+
+
+def _get_user_sync_lock(user_id: int) -> asyncio.Lock:
+    lock = USER_SYNC_LOCKS.get(user_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        USER_SYNC_LOCKS[user_id] = lock
+    return lock
+
+
+def _bet_created_at_sort_key(bet: Dict[str, Any]) -> datetime:
+    created_raw = str(bet.get("created_at") or "").strip()
+    if created_raw.endswith("Z"):
+        created_raw = created_raw[:-1] + "+00:00"
+    if created_raw:
+        try:
+            parsed = datetime.fromisoformat(created_raw)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc)
+        except ValueError:
+            pass
+    return datetime.min.replace(tzinfo=timezone.utc)
 
 
 def user_can_receive_bets(user_id: int) -> bool:
@@ -654,7 +678,7 @@ def _build_active_bet_snapshot(bet: Dict[str, Any], bet_text: str) -> str:
     )
 
 
-async def sync_active_bets_for_user(
+async def _sync_active_bets_for_user_unlocked(
     user_id: int,
     chat_id: int,
     context: ContextTypes.DEFAULT_TYPE,
@@ -719,7 +743,9 @@ async def sync_active_bets_for_user(
         state_changed = True
 
     # Új fogadások küldése + módosított fogadások frissítése
-    for bet_id, bet in visible_bets.items():
+    ordered_visible_bet_ids = sorted(visible_bets.keys(), key=lambda bid: _bet_created_at_sort_key(visible_bets[bid]), reverse=True)
+    for bet_id in ordered_visible_bet_ids:
+        bet = visible_bets[bet_id]
         bet_text = _build_active_bet_text(bet)
         if not bet_text:
             continue
@@ -766,7 +792,7 @@ async def sync_active_bets_for_user(
         _log_info(f"📨 Új fogadás kiküldve (chat_id={chat_id}, bet_id={bet_id}, message_id={message.message_id}).")
 
     # Már nem aktív fogadások eltüntetése (üzenet törlés)
-    stale_ids = [bet_id for bet_id in sent_message_ids if bet_id not in visible_bets]
+    stale_ids = sorted([bet_id for bet_id in sent_message_ids if bet_id not in visible_bets])
     for stale_id in stale_ids:
         message_id = sent_message_ids.pop(stale_id, None)
         sent_snapshots.pop(stale_id, None)
@@ -783,6 +809,17 @@ async def sync_active_bets_for_user(
     if state_changed:
         _mark_message_state_dirty()
     return state_changed
+
+
+async def sync_active_bets_for_user(
+    user_id: int,
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> bool:
+    lock = _get_user_sync_lock(user_id)
+    async with lock:
+        return await _sync_active_bets_for_user_unlocked(user_id=user_id, chat_id=chat_id, context=context)
+
 
 
 async def sync_active_bets_for_all_users(context: ContextTypes.DEFAULT_TYPE) -> None:
