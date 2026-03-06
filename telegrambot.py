@@ -278,6 +278,23 @@ def _safe_write_json(path: str, payload: Any) -> None:
         _log_warning(f"⚠️ Nem sikerült állapotfájlt írni ({path}): {exc}")
 
 
+def _default_bookmaker_links_payload() -> Dict[str, str]:
+    return {
+        str(bookmaker.get("key") or "").strip(): _safe_url(bookmaker.get("url", ""))
+        for bookmaker in BOOKMAKERS
+        if str(bookmaker.get("key") or "").strip() and _safe_url(bookmaker.get("url", ""))
+    }
+
+
+def _ensure_bookmaker_links_file_exists() -> None:
+    path = BOOKMAKER_LINKS_FILE
+    if not path or os.path.exists(path):
+        return
+    payload = _default_bookmaker_links_payload()
+    _safe_write_json(path, payload)
+    _log_info(f"ℹ️ Alap bookmaker link fájl létrehozva: {path}")
+
+
 def _load_bookmaker_link_overrides_if_changed() -> None:
     global BOOKMAKER_LINK_OVERRIDES, BOOKMAKER_LINKS_FILE_MTIME
 
@@ -1384,6 +1401,7 @@ def _send_startup_restart_notice_sync() -> None:
 # MAIN
 # =========================
 def main() -> None:
+    _ensure_bookmaker_links_file_exists()
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_handler))
