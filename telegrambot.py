@@ -1423,7 +1423,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await refresh_and_sync_user_bets(user_id=user_id, chat_id=query.message.chat.id, context=context)
         return
 
-    await query.answer("Ismeretlen művelet.")
+    await query.answer("Nepoznata akcija." if _is_rs_lang(session) else "Ismeretlen művelet.")
 
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
