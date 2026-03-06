@@ -824,11 +824,16 @@ async def sync_active_bets_for_user(
 
 async def sync_active_bets_for_all_users(context: ContextTypes.DEFAULT_TYPE) -> None:
     any_changes = False
-    for user_id, session in USER_SESSIONS.items():
+    # Snapshot iteráció: ha közben session változik (pl. /start), ne dobjon RuntimeError-t.
+    for user_id, session in list(USER_SESSIONS.items()):
         if not bool(session.get("activated") and session.get("receive_bets")):
             continue
-        user_changed = await sync_active_bets_for_user(user_id=user_id, chat_id=user_id, context=context)
-        any_changes = any_changes or user_changed
+        try:
+            user_changed = await sync_active_bets_for_user(user_id=user_id, chat_id=user_id, context=context)
+            any_changes = any_changes or user_changed
+        except Exception as exc:
+            _log_warning(f"⚠️ User sync hiba (user_id={user_id}): {exc}")
+            continue
 
     if any_changes:
         _persist_message_state()
