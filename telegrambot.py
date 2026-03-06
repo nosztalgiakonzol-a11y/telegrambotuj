@@ -697,7 +697,7 @@ def _build_active_bet_text(bet: Dict[str, Any], lang: str = "hu") -> str:
             f"<b>Opklada:</b> {option2}\n"
             f"<b>Kvota:</b> {odds2}\n\n"
             "━━━━━━━━━━━━━━━\n"
-            "⚙️ Izmena filtera: <b>/fogadoirodak</b>"
+            "⚙️ Izmena filtera: <b>/kladionice</b>"
         )
 
     return (
@@ -851,7 +851,7 @@ async def _sync_active_bets_for_user_unlocked(
                     "vagy várj, amíg új arbitrázs fogadás érkezik."
                 ) if lang != "rs" else (
                     "ℹ️ <b>Trenutno nema dostupnih opklada</b> za izabrani par kladionica.\n\n"
-                    "🔄 Dodaj još kladionica komandom <b>/fogadoirodak</b>, "
+                    "🔄 Dodaj još kladionica komandom <b>/kladionice</b>, "
                     "ili sačekaj da stigne nova arbitražna opklada."
                 ),
                 parse_mode=ParseMode.HTML,
@@ -1410,7 +1410,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             ) if not _is_rs_lang(session) else (
                 "✅ <b>GoldenTipsHungary</b>\n"
                 "Kladionice su sačuvane!\n\n"
-                "Ako želiš da izmeniš sa kojih kladionica primaš obaveštenja, pošalji: <b>/fogadoirodak</b>\n"
+                "Ako želiš da izmeniš sa kojih kladionica primaš obaveštenja, pošalji: <b>/kladionice</b>\n"
                 f"📘 Vodič: <a href=\"{GUIDE_LINK}\"><b>Ovde možeš pročitati</b></a>.\n\n"
                 "Šaljem trenutno aktivne opklade..."
             ),
@@ -1438,7 +1438,7 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             "/help - segítség"
         ) if not _is_rs_lang(session) else (
             "/start - pokretanje GoldenTipsHungary toka\n"
-            "/fogadoirodak - izmena filtera kladionica\n"
+            "/kladionice - izmena filtera kladionica\n"
             "/help - pomoć"
         )
     )
@@ -1501,7 +1501,7 @@ def main() -> None:
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("irodak", filters_handler))
-    app.add_handler(CommandHandler("fogadoirodak", filters_handler))
+    app.add_handler(CommandHandler("kladionice", filters_handler))
     app.add_handler(CommandHandler("help", help_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
