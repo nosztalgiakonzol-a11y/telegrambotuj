@@ -182,14 +182,19 @@ def _is_bet_active(bet: Dict[str, Any]) -> bool:
     return match_start > datetime.now(timezone.utc)
 
 
-def _format_match_start(match_start: Optional[datetime]) -> str:
+def _format_match_start(match_start: Optional[datetime], lang: str = "hu") -> str:
     if match_start is None:
-        return "ismeretlen"
+        return "nepoznato" if _normalize_lang(lang) == "rs" else "ismeretlen"
     local_match_start = match_start.astimezone()
     month_names = {
         1: "Január", 2: "Február", 3: "Március", 4: "Április", 5: "Május", 6: "Június",
         7: "Július", 8: "Augusztus", 9: "Szeptember", 10: "Október", 11: "November", 12: "December",
     }
+    if _normalize_lang(lang) == "rs":
+        month_names = {
+            1: "Januar", 2: "Februar", 3: "Mart", 4: "April", 5: "Maj", 6: "Jun",
+            7: "Jul", 8: "Avgust", 9: "Septembar", 10: "Oktobar", 11: "Novembar", 12: "Decembar",
+        }
     month_name = month_names.get(local_match_start.month, str(local_match_start.month))
     return f"{month_name} {local_match_start.day}, {local_match_start.strftime('%H:%M')}"
 
@@ -658,7 +663,7 @@ def _build_active_bet_text(bet: Dict[str, Any], lang: str = "hu") -> str:
         profit_value = "-"
     profit = str(profit_value).strip()
     match_start = _parse_match_start(_get_bet_field_value(bet, "match_start"))
-    match_date = _format_match_start(match_start)
+    match_date = _format_match_start(match_start, lang=lang)
     match_name = html.escape(str(_get_bet_field_value(bet, "match_name") or "-").strip())
 
     book1_name = html.escape(str(bet.get("bookmaker1") or book1.get("name", "Bookmaker 1")).strip())
