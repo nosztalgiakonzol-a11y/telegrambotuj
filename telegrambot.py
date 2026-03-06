@@ -1110,7 +1110,7 @@ def selection_text(selected: Set[str], is_edit_mode: bool = False, lang: str = "
     sr = (
         f"{header_sr}\n\n"
         "Izaberi kod kojih kladionica si registrovan\n"
-        "(možeš izabrati više, ali najviše 6), pa klikni na dugme <b>✅ Kész</b>.\n\n"
+        "(možeš izabrati više, ali najviše 6), pa klikni na dugme <b>✅ Gotovo</b>.\n\n"
         f"💰 Nemaš nalog kod neke kladionice? <a href=\"{AFFILIATE_LINK}\"><b>Registruj se ovde</b></a>.\n\n"
         f"📘 Ako nešto nije jasno, <a href=\"{GUIDE_LINK}\"><b>pročitaj uputstvo</b></a>.\n\n"
         f"<b>Izabrane kladionice:</b>\n{selected_list_sr}"
