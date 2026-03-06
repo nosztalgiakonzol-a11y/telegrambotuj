@@ -1304,10 +1304,7 @@ def _send_startup_restart_notice_sync() -> None:
     if not user_ids:
         return
 
-    message_text = (
-        "ℹ️ A bot újraindult.\n\n"
-        "Ahhoz, hogy újra kapj fogadásokat, kérlek írd be: /start"
-    )
+    message_text = "Ahhoz, hogy újra kapj fogadásokat, kérlek írd be: /start"
 
     for chat_id in user_ids:
         payload = urllib_parse.urlencode({
