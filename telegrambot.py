@@ -1219,6 +1219,7 @@ async def filters_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         text=selection_text(selected, is_edit_mode=True, lang=_session_lang(session)),
         parse_mode=ParseMode.HTML,
         reply_markup=build_selection_keyboard(selected, lang=_session_lang(session)),
+        disable_web_page_preview=True,
     )
 
 
@@ -1353,6 +1354,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             text=selection_text(selected, is_edit_mode=True, lang=_session_lang(session)),
             parse_mode=ParseMode.HTML,
             reply_markup=build_selection_keyboard(selected, lang=_session_lang(session)),
+            disable_web_page_preview=True,
         )
         return
 
@@ -1376,6 +1378,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             text=selection_text(selected, lang=_session_lang(session)),
             parse_mode=ParseMode.HTML,
             reply_markup=build_selection_keyboard(selected, lang=_session_lang(session)),
+            disable_web_page_preview=True,
         )
         return
 
@@ -1412,6 +1415,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 "Šaljem trenutno aktivne opklade..."
             ),
             parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
         )
 
         if query.message is not None:
