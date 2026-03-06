@@ -1147,21 +1147,10 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             )
         return
 
-    if state == "awaiting_guide":
-        await update.message.reply_text(
-            "Először nyisd meg az útmutatót, majd nyomd meg: <b>✅ Okés, elolvastam az útmutatót</b>.",
-            parse_mode=ParseMode.HTML,
-        )
-        return
-
-    if state == "selecting_books":
-        await update.message.reply_text(
-            "👆 Válassz az inline gombokkal, majd nyomd meg a <b>✅ Kész</b> gombot.",
-            parse_mode=ParseMode.HTML,
-        )
-        return
-
-    await update.message.reply_text("Írd be: /start (újrakezdéshez)")
+    await update.message.reply_text(
+        "Ahhoz, hogy újra kapj fogadásokat, kérlek írd be: /start",
+        parse_mode=ParseMode.HTML,
+    )
 
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
