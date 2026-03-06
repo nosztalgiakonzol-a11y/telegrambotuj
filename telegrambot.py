@@ -1330,8 +1330,7 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text(
         "/start - GoldenTipsHungary flow indítása\n"
         "/irodak - szűrt irodák módosítása\n"
-        "/help - segítség\n"
-        "/linkreload - bookmaker linkek újratöltése"
+        "/help - segítség"
     )
 
 
@@ -1381,19 +1380,6 @@ def _send_startup_restart_notice_sync() -> None:
 
 
 
-async def links_reload_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.message is None:
-        return
-
-    # Force refresh on next read
-    global BOOKMAKER_LINKS_FILE_MTIME
-    BOOKMAKER_LINKS_FILE_MTIME = -1.0
-    _load_bookmaker_link_overrides_if_changed()
-    await update.message.reply_text(
-        f"🔄 Bookmaker linkek újratöltve. Aktív override elemek: {len(BOOKMAKER_LINK_OVERRIDES)}"
-    )
-
-
 # =========================
 # MAIN
 # =========================
@@ -1403,7 +1389,6 @@ def main() -> None:
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("irodak", filters_handler))
     app.add_handler(CommandHandler("help", help_handler))
-    app.add_handler(CommandHandler("linkreload", links_reload_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
 
