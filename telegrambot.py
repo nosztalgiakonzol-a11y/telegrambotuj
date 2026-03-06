@@ -111,6 +111,8 @@ BET_FIELD_ALIASES = {
 }
 BET_ID_FIELD_ALIASES = ("bet_id", "tip_id", "row_id", "uuid")
 
+RUNTIME_LANG = "hu"
+
 
 def _resolve_bookmaker_key(value: Any) -> str:
     """Resolve bookmaker name/key value to canonical internal bookmaker key."""
@@ -240,6 +242,18 @@ def _bilingual_text(hu_text: str, sr_text: str) -> str:
 
 def _normalize_lang(value: Any) -> str:
     return "rs" if str(value or "").strip().lower() == "rs" else "hu"
+
+
+def _select_runtime_language_sync() -> str:
+    env_lang = _normalize_lang(os.getenv("BOT_LANG", "hu"))
+    if not os.getenv("BOT_LANG") and os.isatty(0):
+        try:
+            choice = input("Bot language at startup? [HU/RS] (default HU): ").strip().lower()
+        except EOFError:
+            return env_lang
+        if choice in {"hu", "rs"}:
+            return choice
+    return env_lang
 
 
 def _session_lang(session: Dict[str, object]) -> str:
@@ -535,14 +549,14 @@ def get_session(user_id: int) -> Dict[str, object]:
     if user_id not in USER_SESSIONS:
         persisted = PERSISTED_MESSAGE_STATE.get(user_id, {})
         USER_SESSIONS[user_id] = {
-            "state": "awaiting_language",   # awaiting_language | awaiting_code | awaiting_guide | selecting_books | ready
+            "state": "awaiting_code",   # awaiting_code | awaiting_guide | selecting_books | ready
             "selected": set(),          # Set[str]
             "activated": False,
             "receive_bets": False,
             "active_bet_messages": dict(persisted.get("active_bet_messages", {})),
             "active_bet_snapshots": dict(persisted.get("active_bet_snapshots", {})),
             "no_bets_notice_sent": False,
-            "lang": "hu",
+            "lang": RUNTIME_LANG,
         }
     return USER_SESSIONS[user_id]
 
@@ -1155,20 +1169,26 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     user_id = update.effective_user.id
     USER_SESSIONS[user_id] = {
-        "state": "awaiting_language",
+        "state": "awaiting_code",
         "selected": set(),
         "activated": False,
         "receive_bets": False,
         "active_bet_messages": {},
         "active_bet_snapshots": {},
         "no_bets_notice_sent": False,
-        "lang": "hu",
+        "lang": RUNTIME_LANG,
     }
     _mark_message_state_dirty()
     _persist_message_state(force=True)
 
     await update.message.reply_text(
-        "🌐 Válassz nyelvet / Izaberi jezik:\n\nHU vagy RS",
+        (
+            "👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>\n\n"
+            "Kérlek add meg a vásárláshoz kapott <b>aktivációs kódodat</b> az induláshoz."
+        ) if not _is_rs_lang(USER_SESSIONS[user_id]) else (
+            "👋 <b>Dobrodošao u GoldenTipsHungary sistem!</b>\n\n"
+            "Unesi svoj <b>aktivacioni kod</b> koji si dobio kupovinom."
+        ),
         parse_mode=ParseMode.HTML,
     )
 
@@ -1217,27 +1237,10 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     state = session.get("state")
 
     if state == "awaiting_language":
-        normalized = _normalize_lang(text)
-        if text.lower() not in {"hu", "rs"}:
-            await update.message.reply_text(
-                "Kérlek írd be: HU vagy RS" if not _is_rs_lang(session) else "Molim te upiši: HU ili RS",
-                parse_mode=ParseMode.HTML,
-            )
-            return
-
-        session["lang"] = normalized
+        # Backward compatibility for previously persisted state.
+        session["lang"] = RUNTIME_LANG
         session["state"] = "awaiting_code"
-        await update.message.reply_text(
-            (
-                "👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>\n\n"
-                "Kérlek add meg a vásárláshoz kapott <b>aktivációs kódodat</b> az induláshoz."
-            ) if normalized != "rs" else (
-                "👋 <b>Dobrodošao u GoldenTipsHungary sistem!</b>\n\n"
-                "Unesi svoj <b>aktivacioni kod</b> koji si dobio kupovinom."
-            ),
-            parse_mode=ParseMode.HTML,
-        )
-        return
+        state = "awaiting_code"
 
     if state == "awaiting_code":
         if ACTIVATION_SERVICE.has_valid_code(text):
@@ -1245,14 +1248,14 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
             if previous_owner_id is not None:
                 USER_SESSIONS[previous_owner_id] = {
-                    "state": "awaiting_language",
+                    "state": "awaiting_code",
                     "selected": set(),
                     "activated": False,
                     "receive_bets": False,
                     "active_bet_messages": {},
                     "active_bet_snapshots": {},
                     "no_bets_notice_sent": False,
-                    "lang": "hu",
+                    "lang": RUNTIME_LANG,
                 }
                 _mark_message_state_dirty()
                 _persist_message_state(force=True)
@@ -1487,6 +1490,8 @@ def _send_startup_restart_notice_sync() -> None:
 # MAIN
 # =========================
 def main() -> None:
+    global RUNTIME_LANG
+    RUNTIME_LANG = _select_runtime_language_sync()
     _ensure_bookmaker_links_file_exists()
     app = Application.builder().token(BOT_TOKEN).build()
 
