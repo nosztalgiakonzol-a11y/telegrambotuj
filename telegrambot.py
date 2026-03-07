@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Set, List
+from typing import Any, Dict, Optional, Set, List, Tuple
 import asyncio
 import html
 import json
 import os
+import time
 from datetime import datetime, timezone
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
@@ -28,10 +29,13 @@ BOT_TOKEN = "8645094734:AAGUxAxGM9maNGMrVHMvRUk97z8NvuVgiFQ"
 
 MATCH_LINK = "https://sajatoldalad.hu/meccs"
 CALC_LINK = "https://arbify-bet.hu/calculator"
+CALC_DYNAMIC_BASE_URL = os.getenv("CALC_DYNAMIC_BASE_URL", "https://arbify-bet.hu/calculator").strip() or "https://arbify-bet.hu/calculator"
+CALC_DEFAULT_STAKE = os.getenv("CALC_DEFAULT_STAKE", "14950").strip() or "14950"
+BOOKMAKER_LINKS_FILE = os.getenv("BOOKMAKER_LINKS_FILE", "bookmaker_links.json").strip() or "bookmaker_links.json"
 AFFILIATE_LINK = "https://arbify-bet.hu/register?lang=rs"
 GUIDE_LINK = "https://arbify-bet.hu/tutorial-sr"
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://sonudgyyvxncdcganppl.supabase.co").strip().rstrip("/")
 # SUPABASE_KEY marad elsődleges a visszamenőleges kompatibilitás miatt.
 # SUPABASE_SERVICE_ROLE_KEY csak szerver oldali környezetben használandó (ne kerüljön repo-ba).
 SUPABASE_KEY = (
@@ -40,29 +44,39 @@ SUPABASE_KEY = (
     or os.getenv("SUPABASE_ANON_KEY")
     or ""
 ).strip()
+SUPABASE_READ_KEY = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    or os.getenv("SUPABASE_KEY")
+    or os.getenv("SUPABASE_ANON_KEY")
+    or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvbnVkZ3l5dnhuY2RjZ2FucHBsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDAzMDk0MywiZXhwIjoyMDc1NjA2OTQzfQ.6mmHZJ2QS3a4TywxZ-lswdcvwPCF5NCYLe6CuiO8-3A"
+).strip()
 SUPABASE_BETS_TABLE = os.getenv("SUPABASE_BETS_TABLE", "tips").strip() or "tips"
 BOT_LOG_FILE = os.getenv("BOT_LOG_FILE", "").strip()
 try:
-    SUPABASE_SYNC_INTERVAL_SECONDS = max(3, int(os.getenv("SUPABASE_SYNC_INTERVAL_SECONDS", "10")))
+    SUPABASE_SYNC_INTERVAL_SECONDS = max(5, int(os.getenv("SUPABASE_SYNC_INTERVAL_SECONDS", "35")))
 except ValueError:
-    SUPABASE_SYNC_INTERVAL_SECONDS = 10
+    SUPABASE_SYNC_INTERVAL_SECONDS = 35
 try:
     SUPABASE_QUERY_LIMIT = min(1000, max(1, int(os.getenv("SUPABASE_QUERY_LIMIT", "100"))))
 except ValueError:
     SUPABASE_QUERY_LIMIT = 100
+try:
+    MESSAGE_STATE_FLUSH_INTERVAL_SECONDS = max(1, int(os.getenv("MESSAGE_STATE_FLUSH_INTERVAL_SECONDS", "5")))
+except ValueError:
+    MESSAGE_STATE_FLUSH_INTERVAL_SECONDS = 5
 
 # Bookmaker lista (a kért nevekkel)
 BOOKMAKERS = [
-    {"key": "maxbet", "name": "MaxBet", "emoji": "🔥", "url": "https://maxbet.com/"},
-    {"key": "mozzartbet", "name": "Mozzartbet", "emoji": "💸", "url": "https://www.mozzartbet.com/"},
-    {"key": "admiralbet", "name": "AdmiralBet", "emoji": "🎯", "url": "https://admiralbet.com/"},
-    {"key": "meridian", "name": "Meridian", "emoji": "🟣", "url": "https://meridianbet.com/"},
-    {"key": "superbet", "name": "Superbet", "emoji": "🏅", "url": "https://superbet.com/"},
-    {"key": "rabona", "name": "Rabona", "emoji": "🟡", "url": "https://rabona.com/"},
-    {"key": "megapari", "name": "Megapari", "emoji": "🔵", "url": "https://megapari.com/"},
-    {"key": "funbet", "name": "Funbet", "emoji": "⚫", "url": "https://funbet.com/"},
-    {"key": "20bet", "name": "20bet", "emoji": "🟢", "url": "https://20bet.com/"},
-    {"key": "mostbet", "name": "MostBet", "emoji": "🟠", "url": "https://mostbet.com/"},
+    {"key": "maxbet", "name": "MaxBet", "emoji": "🔥", "url": "https://www.maxbet.rs/sr/registracija"},
+    {"key": "mozzartbet", "name": "Mozzartbet", "emoji": "💸", "url": "https://www.mozzartbet.com/rs/registration"},
+    {"key": "admiralbet", "name": "AdmiralBet", "emoji": "🎯", "url": "https://admiralbet.rs/registration"},
+    {"key": "meridian", "name": "Meridian", "emoji": "🟣", "url": "https://meridianbet.rs/sr/registracija"},
+    {"key": "superbet", "name": "Superbet", "emoji": "🏅", "url": "https://superbet.rs/registracija"},
+    {"key": "rabona", "name": "Rabona", "emoji": "🟡", "url": "https://rabona.com/registration"},
+    {"key": "megapari", "name": "Megapari", "emoji": "🔵", "url": "https://megapari.com/registration"},
+    {"key": "funbet", "name": "Frumzi", "emoji": "⚫", "url": "https://frumzi.com"},
+    {"key": "20bet", "name": "20bet", "emoji": "🟢", "url": "https://20bet.com/registration"},
+    {"key": "mostbet", "name": "MostBet", "emoji": "🟠", "url": "https://mostbet.com"},
 ]
 
 BOOKMAKER_BY_KEY = {b["key"]: b for b in BOOKMAKERS}
@@ -78,6 +92,7 @@ for _bookmaker in BOOKMAKERS:
     BOOKMAKER_KEY_BY_NORMALIZED_VALUE[_normalize_bookmaker_value(_bookmaker["key"])] = _bookmaker["key"]
     BOOKMAKER_KEY_BY_NORMALIZED_VALUE[_normalize_bookmaker_value(_bookmaker["name"])] = _bookmaker["key"]
 BOOKMAKER_KEY_BY_NORMALIZED_VALUE["ivibet"] = "20bet"
+BOOKMAKER_KEY_BY_NORMALIZED_VALUE["mozzart"] = "mozzartbet"
 MAX_SELECTED_BOOKMAKERS = 6
 BOOKMAKER_FIELD_ALIASES = {
     "book1_key": ("book_1_key", "book1", "book_1", "bookmaker_1"),
@@ -95,6 +110,8 @@ BET_FIELD_ALIASES = {
     "odds2": ("odd2", "odd_2", "odds_2", "coef2", "coefficient2"),
 }
 BET_ID_FIELD_ALIASES = ("bet_id", "tip_id", "row_id", "uuid")
+
+RUNTIME_LANG = "hu"
 
 
 def _resolve_bookmaker_key(value: Any) -> str:
@@ -151,16 +168,35 @@ def _parse_match_start(value: Any) -> Optional[datetime]:
 
 
 def _is_bet_active(bet: Dict[str, Any]) -> bool:
-    match_start = _parse_match_start(bet.get("match_start"))
+    is_active_raw = bet.get("is_active")
+    if isinstance(is_active_raw, bool) and not is_active_raw:
+        return False
+
+    status_raw = str(bet.get("status") or "").strip().lower()
+    if status_raw in {"inactive", "closed", "expired", "settled", "finished"}:
+        return False
+
+    match_start = _parse_match_start(_get_bet_field_value(bet, "match_start"))
     if match_start is None:
         return True
     return match_start > datetime.now(timezone.utc)
 
 
-def _format_match_start(match_start: Optional[datetime]) -> str:
+def _format_match_start(match_start: Optional[datetime], lang: str = "hu") -> str:
     if match_start is None:
-        return "ismeretlen"
-    return match_start.astimezone().strftime("%Y-%m-%d, %H:%M")
+        return "nepoznato" if _normalize_lang(lang) == "rs" else "ismeretlen"
+    local_match_start = match_start.astimezone()
+    month_names = {
+        1: "Január", 2: "Február", 3: "Március", 4: "Április", 5: "Május", 6: "Június",
+        7: "Július", 8: "Augusztus", 9: "Szeptember", 10: "Október", 11: "November", 12: "December",
+    }
+    if _normalize_lang(lang) == "rs":
+        month_names = {
+            1: "Januar", 2: "Februar", 3: "Mart", 4: "April", 5: "Maj", 6: "Jun",
+            7: "Jul", 8: "Avgust", 9: "Septembar", 10: "Oktobar", 11: "Novembar", 12: "Decembar",
+        }
+    month_name = month_names.get(local_match_start.month, str(local_match_start.month))
+    return f"{month_name} {local_match_start.day}, {local_match_start.strftime('%H:%M')}"
 
 
 def _format_sync_interval(seconds: int) -> str:
@@ -204,6 +240,41 @@ def _log_warning(message: str) -> None:
     _log(message)
 
 
+def _bilingual_text(hu_text: str, sr_text: str) -> str:
+    """Return Hungarian + Serbian version of the same user-facing text."""
+    return f"{hu_text}\n\n🇷🇸 {sr_text}"
+
+
+def _normalize_lang(value: Any) -> str:
+    return "rs" if str(value or "").strip().lower() == "rs" else "hu"
+
+
+def _select_runtime_language_sync() -> str:
+    env_lang = _normalize_lang(os.getenv("BOT_LANG", "hu"))
+    if not os.getenv("BOT_LANG") and os.isatty(0):
+        try:
+            choice = input("Bot language at startup? [HU/RS] (default HU): ").strip().lower()
+        except EOFError:
+            return env_lang
+        if choice in {"hu", "rs"}:
+            return choice
+    return env_lang
+
+
+def _session_lang(session: Dict[str, object]) -> str:
+    return _normalize_lang(session.get("lang", "hu"))
+
+
+def _is_rs_lang(session: Dict[str, object]) -> bool:
+    return _session_lang(session) == "rs"
+
+
+TRANSLATIONS_SR = {
+    "start_welcome": "👋 <b>Dobrodošao u GoldenTipsHungary sistem!</b>\n\nUnesi svoj <b>aktivacioni kod</b> koji si dobio kupovinom.",
+    "no_bets": "ℹ️ <b>Trenutno nema dostupnih opklada</b> za izabrani par kladionica.\n\n🔄 Dodaj još kladionica komandom <b>/kancelarije</b>, ili sačekaj da stigne nova arbitražna opklada.",
+    "saved": "✅ <b>GoldenTipsHungary</b>\nKladionice su sačuvane!\n\nAko želiš da izmeniš sa kojih kladionica primaš obaveštenja, pošalji: <b>/irodak</b>.\n\nŠaljem trenutno aktivne opklade...",
+}
+
 def _extract_total_count_from_content_range(content_range: str) -> Optional[int]:
     if "/" not in content_range:
         return None
@@ -215,12 +286,206 @@ def _extract_total_count_from_content_range(content_range: str) -> Optional[int]
     except ValueError:
         return None
 
+
+def _safe_read_json(path: str, fallback: Any) -> Any:
+    if not path:
+        return fallback
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return fallback
+
+
+def _safe_write_json(path: str, payload: Any) -> None:
+    if not path:
+        return
+    tmp_path = f"{path}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, sort_keys=True)
+        os.replace(tmp_path, path)
+    except OSError as exc:
+        _log_warning(f"⚠️ Nem sikerült állapotfájlt írni ({path}): {exc}")
+
+
+def _default_bookmaker_links_payload() -> Dict[str, str]:
+    return {
+        str(bookmaker.get("key") or "").strip(): _safe_url(bookmaker.get("url", ""))
+        for bookmaker in BOOKMAKERS
+        if str(bookmaker.get("key") or "").strip() and _safe_url(bookmaker.get("url", ""))
+    }
+
+
+def _ensure_bookmaker_links_file_exists() -> None:
+    path = BOOKMAKER_LINKS_FILE
+    if not path or os.path.exists(path):
+        return
+    payload = _default_bookmaker_links_payload()
+    _safe_write_json(path, payload)
+    _log_info(f"ℹ️ Alap bookmaker link fájl létrehozva: {path}")
+
+
+def _load_bookmaker_link_overrides_if_changed() -> None:
+    global BOOKMAKER_LINK_OVERRIDES, BOOKMAKER_LINKS_FILE_MTIME
+
+    path = BOOKMAKER_LINKS_FILE
+    if not path:
+        return
+
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        if BOOKMAKER_LINK_OVERRIDES:
+            BOOKMAKER_LINK_OVERRIDES = {}
+            BOOKMAKER_LINKS_FILE_MTIME = -1.0
+            _log_info("ℹ️ bookmakerek külső link-fájlja nem elérhető, visszaállás alap linkekre.")
+        return
+
+    if mtime == BOOKMAKER_LINKS_FILE_MTIME:
+        return
+
+    raw = _safe_read_json(path, {})
+    if not isinstance(raw, dict):
+        _log_warning(f"⚠️ Érvénytelen bookmaker link fájl formátum: {path} (objektum/dict szükséges).")
+        BOOKMAKER_LINKS_FILE_MTIME = mtime
+        return
+
+    loaded: Dict[str, str] = {}
+    for key, value in raw.items():
+        resolved_key = _resolve_bookmaker_key(key)
+        if not resolved_key:
+            continue
+        safe = _safe_url(value)
+        if safe:
+            loaded[resolved_key] = safe
+
+    BOOKMAKER_LINK_OVERRIDES = loaded
+    BOOKMAKER_LINKS_FILE_MTIME = mtime
+    _log_info(f"ℹ️ Bookmaker link overrides betöltve: {len(loaded)} elem ({path}).")
+
+
+def _get_runtime_bookmaker_url(bookmaker: Optional[Dict[str, Any]]) -> str:
+    _load_bookmaker_link_overrides_if_changed()
+    if bookmaker is None:
+        return ""
+    key = str(bookmaker.get("key") or "").strip()
+    override = _safe_url(BOOKMAKER_LINK_OVERRIDES.get(key, ""))
+    if override:
+        return override
+    return _safe_url(bookmaker.get("url", ""))
+
+
+def _bet_snapshot_payload(bet: Dict[str, Any]) -> str:
+    return json.dumps(bet, sort_keys=True, default=str)
+
+
+def _load_last_bet_snapshots() -> Dict[str, str]:
+    raw = _safe_read_json(BETS_SNAPSHOT_FILE, {})
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): str(v) for k, v in raw.items()}
+
+
+def _persist_last_bet_snapshots(snapshot_map: Dict[str, str]) -> None:
+    _safe_write_json(BETS_SNAPSHOT_FILE, snapshot_map)
+
+
+def _load_persisted_message_state() -> Dict[int, Dict[str, Dict[str, Any]]]:
+    raw = _safe_read_json(MESSAGE_STATE_FILE, {})
+    if not isinstance(raw, dict):
+        return {}
+
+    restored: Dict[int, Dict[str, Dict[str, Any]]] = {}
+    for raw_user_id, state in raw.items():
+        if not isinstance(state, dict):
+            continue
+        try:
+            user_id = int(raw_user_id)
+        except (TypeError, ValueError):
+            continue
+
+        raw_messages = state.get("active_bet_messages", {})
+        raw_snapshots = state.get("active_bet_snapshots", {})
+        if not isinstance(raw_messages, dict) or not isinstance(raw_snapshots, dict):
+            continue
+
+        messages: Dict[str, int] = {}
+        for bet_id, message_id in raw_messages.items():
+            try:
+                messages[str(bet_id)] = int(message_id)
+            except (TypeError, ValueError):
+                continue
+
+        snapshots = {str(k): str(v) for k, v in raw_snapshots.items()}
+        restored[user_id] = {
+            "active_bet_messages": messages,
+            "active_bet_snapshots": snapshots,
+        }
+    return restored
+
+
+def _mark_message_state_dirty() -> None:
+    global MESSAGE_STATE_DIRTY
+    MESSAGE_STATE_DIRTY = True
+
+
+def _persist_message_state(force: bool = False) -> None:
+    global MESSAGE_STATE_DIRTY, LAST_MESSAGE_STATE_FLUSH_TS
+    now_ts = time.time()
+    if not force:
+        if not MESSAGE_STATE_DIRTY:
+            return
+        if now_ts - LAST_MESSAGE_STATE_FLUSH_TS < MESSAGE_STATE_FLUSH_INTERVAL_SECONDS:
+            return
+
+    payload: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for user_id, session in USER_SESSIONS.items():
+        payload[str(user_id)] = {
+            "active_bet_messages": dict(session.get("active_bet_messages", {})),
+            "active_bet_snapshots": dict(session.get("active_bet_snapshots", {})),
+        }
+    _safe_write_json(MESSAGE_STATE_FILE, payload)
+    MESSAGE_STATE_DIRTY = False
+    LAST_MESSAGE_STATE_FLUSH_TS = now_ts
+
+
+def _compute_bet_diff(active_bets: List[Dict[str, Any]]) -> Tuple[int, int, int, Dict[str, str]]:
+    new_snapshot_map: Dict[str, str] = {}
+    added = 0
+    changed = 0
+    dropped = 0
+
+    for bet in active_bets:
+        bet_id = _resolve_bet_id(bet)
+        if not bet_id:
+            continue
+        current_snapshot = _bet_snapshot_payload(bet)
+        previous_snapshot = LAST_BET_SNAPSHOTS.get(bet_id)
+        if previous_snapshot is None:
+            added += 1
+        elif previous_snapshot != current_snapshot:
+            changed += 1
+        new_snapshot_map[bet_id] = current_snapshot
+
+    dropped = max(0, len(LAST_BET_SNAPSHOTS) - len(new_snapshot_map))
+    return added, changed, dropped, new_snapshot_map
+
 # Aktív fogadások in-memory cache (később DB-re cserélhető)
 ACTIVE_BETS: Dict[str, Dict[str, Any]] = {}
 SUPABASE_LAST_SYNC_SUMMARY = "n/a"
 
+BETS_SNAPSHOT_FILE = os.getenv("BETS_SNAPSHOT_FILE", "bets_snapshot.txt").strip() or "bets_snapshot.txt"
+MESSAGE_STATE_FILE = os.getenv("MESSAGE_STATE_FILE", "message_state.txt").strip() or "message_state.txt"
+LAST_BET_SNAPSHOTS: Dict[str, str] = {}
+MESSAGE_STATE_DIRTY = False
+LAST_MESSAGE_STATE_FLUSH_TS = 0.0
+
 # Demo session tárolás memóriában (újraindítás után törlődik)
 USER_SESSIONS: Dict[int, Dict[str, object]] = {}
+USER_SYNC_LOCKS: Dict[int, asyncio.Lock] = {}
+BOOKMAKER_LINK_OVERRIDES: Dict[str, str] = {}
+BOOKMAKER_LINKS_FILE_MTIME: float = -1.0
 
 
 @dataclass
@@ -278,6 +543,8 @@ class ActivationService:
 
 
 ACTIVATION_SERVICE = ActivationService()
+LAST_BET_SNAPSHOTS = _load_last_bet_snapshots()
+PERSISTED_MESSAGE_STATE = _load_persisted_message_state()
 
 
 # =========================
@@ -285,15 +552,41 @@ ACTIVATION_SERVICE = ActivationService()
 # =========================
 def get_session(user_id: int) -> Dict[str, object]:
     if user_id not in USER_SESSIONS:
+        persisted = PERSISTED_MESSAGE_STATE.get(user_id, {})
         USER_SESSIONS[user_id] = {
             "state": "awaiting_code",   # awaiting_code | awaiting_guide | selecting_books | ready
             "selected": set(),          # Set[str]
             "activated": False,
             "receive_bets": False,
-            "active_bet_messages": {},  # Dict[str, int] -> bet_id: message_id
-            "active_bet_snapshots": {}, # Dict[str, str] -> bet_id: bet_text
+            "active_bet_messages": dict(persisted.get("active_bet_messages", {})),
+            "active_bet_snapshots": dict(persisted.get("active_bet_snapshots", {})),
+            "no_bets_notice_sent": False,
+            "lang": RUNTIME_LANG,
         }
     return USER_SESSIONS[user_id]
+
+
+def _get_user_sync_lock(user_id: int) -> asyncio.Lock:
+    lock = USER_SYNC_LOCKS.get(user_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        USER_SYNC_LOCKS[user_id] = lock
+    return lock
+
+
+def _bet_created_at_sort_key(bet: Dict[str, Any]) -> datetime:
+    created_raw = str(bet.get("created_at") or "").strip()
+    if created_raw.endswith("Z"):
+        created_raw = created_raw[:-1] + "+00:00"
+    if created_raw:
+        try:
+            parsed = datetime.fromisoformat(created_raw)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            return parsed.astimezone(timezone.utc)
+        except ValueError:
+            pass
+    return datetime.min.replace(tzinfo=timezone.utc)
 
 
 def user_can_receive_bets(user_id: int) -> bool:
@@ -310,6 +603,10 @@ def set_active_bets(active_bets: List[Dict[str, Any]]) -> None:
     Külső DB szinkron ehhez a metódushoz küldje az éppen aktív fogadásokat.
     A bet-enként stabil kulcs: bet["id"].
     """
+    global LAST_BET_SNAPSHOTS
+
+    added_count, changed_count, dropped_count, new_snapshot_map = _compute_bet_diff(active_bets)
+
     ACTIVE_BETS.clear()
     dropped_without_id = 0
     for bet in active_bets:
@@ -318,6 +615,16 @@ def set_active_bets(active_bets: List[Dict[str, Any]]) -> None:
             ACTIVE_BETS[bet_id] = bet
         else:
             dropped_without_id += 1
+
+    LAST_BET_SNAPSHOTS = new_snapshot_map
+    _persist_last_bet_snapshots(LAST_BET_SNAPSHOTS)
+
+    _log_info(
+        "ℹ️ Bet diff összegzés: "
+        f"új={added_count}, módosult={changed_count}, eltűnt={dropped_count}, "
+        f"feldolgozott={len(ACTIVE_BETS)}"
+    )
+
     if dropped_without_id:
         _log_warning(
             f"⚠️ {dropped_without_id} Supabase sor kihagyva, mert nem volt azonosító mező "
@@ -337,13 +644,11 @@ def _bet_matches_selected_books(bet: Dict[str, Any], selected: Set[str]) -> bool
     return book1_key in selected and book2_key in selected
 
 
-def _build_active_bet_text(bet: Dict[str, Any]) -> str:
+def _build_active_bet_text(bet: Dict[str, Any], lang: str = "hu") -> str:
     if not _is_bet_active(bet):
         return ""
 
     external_text = str(bet.get("text", "")).strip()
-    if external_text:
-        return external_text
 
     book1_source = _get_bet_bookmaker_value(bet, "book1_key", "bookmaker1")
     book2_source = _get_bet_bookmaker_value(bet, "book2_key", "bookmaker2")
@@ -351,26 +656,27 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
     book1 = BOOKMAKER_BY_KEY.get(_resolve_bookmaker_key(book1_source))
     book2 = BOOKMAKER_BY_KEY.get(_resolve_bookmaker_key(book2_source))
     if not book1 or not book2:
-        return ""
+        return external_text
 
     profit_value = _get_bet_field_value(bet, "profit_percent")
     if profit_value is None:
         profit_value = "-"
     profit = str(profit_value).strip()
     match_start = _parse_match_start(_get_bet_field_value(bet, "match_start"))
-    match_date = _format_match_start(match_start)
+    match_date = _format_match_start(match_start, lang=lang)
     match_name = html.escape(str(_get_bet_field_value(bet, "match_name") or "-").strip())
 
     book1_name = html.escape(str(bet.get("bookmaker1") or book1.get("name", "Bookmaker 1")).strip())
     book2_name = html.escape(str(bet.get("bookmaker2") or book2.get("name", "Bookmaker 2")).strip())
-    book1_affiliate = _safe_url(bet.get("link1") or book1.get("url", ""))
-    book2_affiliate = _safe_url(bet.get("link2") or book2.get("url", ""))
+    # A fogadóiroda neve mindig a fix, irodához tartozó regisztrációs linkre mutasson.
+    book1_affiliate = _get_runtime_bookmaker_url(book1)
+    book2_affiliate = _get_runtime_bookmaker_url(book2)
     match_link1 = _safe_url(bet.get("original_link1") or bet.get("quick_link_url") or MATCH_LINK)
     match_link2 = _safe_url(bet.get("original_link2") or bet.get("quick_link_url") or MATCH_LINK)
     if not book1_affiliate:
-        book1_affiliate = _safe_url(book1.get("url", "")) or _safe_url(MATCH_LINK)
+        book1_affiliate = _get_runtime_bookmaker_url(book1) or _safe_url(MATCH_LINK)
     if not book2_affiliate:
-        book2_affiliate = _safe_url(book2.get("url", "")) or _safe_url(MATCH_LINK)
+        book2_affiliate = _get_runtime_bookmaker_url(book2) or _safe_url(MATCH_LINK)
     if not match_link1:
         match_link1 = _safe_url(MATCH_LINK)
     if not match_link2:
@@ -380,6 +686,24 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
     option2 = html.escape(str(_get_bet_field_value(bet, "option2") or "-").strip() or "-")
     odds1 = html.escape(str(_get_bet_field_value(bet, "odds1") or "-").strip() or "-")
     odds2 = html.escape(str(_get_bet_field_value(bet, "odds2") or "-").strip() or "-")
+
+    if _normalize_lang(lang) == "rs":
+        return (
+            "🔒 <b>NOVA ARBITRAŽNA OPKLADA</b>\n\n"
+            f"💸 <b>Profit:</b> {html.escape(profit)}\n"
+            "🟢 <b>STATUS:</b> AKTIVNO\n"
+            f"📅 <b>Datum:</b> {html.escape(match_date)} • ⏳\n\n"
+            f"{book1['emoji']} <a href=\"{html.escape(book1_affiliate, quote=True)}\"><b>{book1_name}</b></a>\n"
+            f"<b>Meč:</b> <a href=\"{html.escape(match_link1, quote=True)}\">{match_name}</a>\n"
+            f"<b>Opklada:</b> {option1}\n"
+            f"<b>Kvota:</b> {odds1}\n\n"
+            f"{book2['emoji']} <a href=\"{html.escape(book2_affiliate, quote=True)}\"><b>{book2_name}</b></a>\n"
+            f"<b>Meč:</b> <a href=\"{html.escape(match_link2, quote=True)}\">{match_name}</a>\n"
+            f"<b>Opklada:</b> {option2}\n"
+            f"<b>Kvota:</b> {odds2}\n\n"
+            "━━━━━━━━━━━━━━━\n"
+            "⚙️ Izmena filtera: <b>/kladionice</b>"
+        )
 
     return (
         "🔒 <b>ÚJ ARBITRÁZS FOGADÁS</b>\n\n"
@@ -399,7 +723,46 @@ def _build_active_bet_text(bet: Dict[str, Any]) -> str:
     )
 
 
-def _build_active_bet_keyboard(bet: Dict[str, Any]) -> InlineKeyboardMarkup:
+
+def _calculator_book_param_name(bookmaker_name: str) -> str:
+    normalized = "".join(ch for ch in str(bookmaker_name or "").strip().lower() if ch.isalnum())
+    if not normalized:
+        normalized = "bookmaker"
+    return f"{normalized}Url"
+
+
+def _build_calculator_link(bet: Dict[str, Any], lang: str = "hu") -> str:
+    odds1 = str(_get_bet_field_value(bet, "odds1") or "").strip()
+    odds2 = str(_get_bet_field_value(bet, "odds2") or "").strip()
+    book1_name = str(_get_bet_field_value(bet, "bookmaker1") or _get_bet_bookmaker_value(bet, "book1_key", "bookmaker1") or "Bookmaker1").strip()
+    book2_name = str(_get_bet_field_value(bet, "bookmaker2") or _get_bet_bookmaker_value(bet, "book2_key", "bookmaker2") or "Bookmaker2").strip()
+
+    book1_url = _safe_url(bet.get("original_link1") or bet.get("link1") or "")
+    book2_url = _safe_url(bet.get("original_link2") or bet.get("link2") or "")
+    match_name = str(_get_bet_field_value(bet, "match_name") or "").strip()
+    option1 = str(_get_bet_field_value(bet, "option1") or "").strip()
+    option2 = str(_get_bet_field_value(bet, "option2") or "").strip()
+
+    query_pairs: List[Tuple[str, str]] = [
+        ("odds1", odds1),
+        ("odds2", odds2),
+        ("odds1Book", book1_name),
+        ("odds2Book", book2_name),
+        ("stake", CALC_DEFAULT_STAKE),
+        ("odds1Label", book1_name),
+        ("odds2Label", book2_name),
+        (_calculator_book_param_name(book1_name), book1_url),
+        (_calculator_book_param_name(book2_name), book2_url),
+        ("Meccs", match_name),
+        ("F1", option1),
+        ("F2", option2),
+    ]
+    if _normalize_lang(lang) == "rs":
+        query_pairs.append(("lang", "rs"))
+    return f"{CALC_DYNAMIC_BASE_URL}?{urllib_parse.urlencode(query_pairs)}"
+
+
+def _build_active_bet_keyboard(bet: Dict[str, Any], lang: str = "hu") -> InlineKeyboardMarkup:
     book1_source = _get_bet_bookmaker_value(bet, "book1_key", "bookmaker1")
     book2_source = _get_bet_bookmaker_value(bet, "book2_key", "bookmaker2")
     book1 = BOOKMAKER_BY_KEY.get(_resolve_bookmaker_key(book1_source))
@@ -419,32 +782,29 @@ def _build_active_bet_keyboard(bet: Dict[str, Any]) -> InlineKeyboardMarkup:
     rows: List[List[InlineKeyboardButton]] = []
     if first_row:
         rows.append(first_row)
-    rows.append([InlineKeyboardButton("🧮 Kalkulátor", url=CALC_LINK)])
-    rows.append([InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj", url=AFFILIATE_LINK)])
+    rows.append([InlineKeyboardButton("🧮 Kalkulator" if _normalize_lang(lang) == "rs" else "🧮 Kalkulátor", url=_build_calculator_link(bet, lang=lang))])
+    rows.append([InlineKeyboardButton("💰 Nemaš nalog? Registruj se" if _normalize_lang(lang) == "rs" else "💰 Nincs fiókod? Regisztrálj", url=AFFILIATE_LINK)])
     return InlineKeyboardMarkup(rows)
 
 
-def _build_active_bet_snapshot(bet: Dict[str, Any], bet_text: str) -> str:
+def _build_active_bet_snapshot(bet: Dict[str, Any], bet_text: str, lang: str = "hu") -> str:
+    """Stabil snapshot az üzenet frissítéshez (szöveg + teljes rekord tartalom)."""
     return json.dumps(
         {
             "text": bet_text,
-            "bookmaker1": bet.get("bookmaker1"),
-            "bookmaker2": bet.get("bookmaker2"),
-            "original_link1": bet.get("original_link1"),
-            "original_link2": bet.get("original_link2"),
-            "link1": bet.get("link1"),
-            "link2": bet.get("link2"),
+            "bet": bet,
+            "calculator_link": _build_calculator_link(bet, lang=lang),
         },
         sort_keys=True,
         default=str,
     )
 
 
-async def sync_active_bets_for_user(
+async def _sync_active_bets_for_user_unlocked(
     user_id: int,
     chat_id: int,
     context: ContextTypes.DEFAULT_TYPE,
-) -> None:
+) -> bool:
     """
     Azonnali aktív fogadás szinkron:
     - új aktív fogadások kiküldése
@@ -452,11 +812,13 @@ async def sync_active_bets_for_user(
     """
     session = get_session(user_id)
     if not user_can_receive_bets(user_id):
-        return
+        return False
 
     selected: Set[str] = session["selected"]  # type: ignore
+    lang = _session_lang(session)
     sent_message_ids: Dict[str, int] = session["active_bet_messages"]  # type: ignore
     sent_snapshots: Dict[str, str] = session["active_bet_snapshots"]  # type: ignore
+    state_changed = False
 
     visible_bets: Dict[str, Dict[str, Any]] = {}
     selected_match_count = 0
@@ -485,12 +847,36 @@ async def sync_active_bets_for_user(
         else:
             _log_info(f"ℹ️ Nincs jelenleg aktív és szűrőnek megfelelő fogadás egyszerre (chat_id={chat_id}).")
 
+        if not bool(session.get("no_bets_notice_sent")):
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    "ℹ️ <b>Jelenleg nincs elérhető fogadás</b> a kiválasztott irodapárosítással.\n\n"
+                    "🔄 Adj hozzá több irodát a <b>/irodak</b> paranccsal, "
+                    "vagy várj, amíg új arbitrázs fogadás érkezik."
+                ) if lang != "rs" else (
+                    "ℹ️ <b>Trenutno nema dostupnih opklada</b> za izabrani par kladionica.\n\n"
+                    "🔄 Dodaj još kladionica komandom <b>/kladionice</b>, "
+                    "ili sačekaj da stigne nova arbitražna opklada."
+                ),
+                parse_mode=ParseMode.HTML,
+                disable_web_page_preview=True,
+            )
+            session["no_bets_notice_sent"] = True
+            state_changed = True
+
+    if visible_bets and bool(session.get("no_bets_notice_sent")):
+        session["no_bets_notice_sent"] = False
+        state_changed = True
+
     # Új fogadások küldése + módosított fogadások frissítése
-    for bet_id, bet in visible_bets.items():
-        bet_text = _build_active_bet_text(bet)
+    ordered_visible_bet_ids = sorted(visible_bets.keys(), key=lambda bid: _bet_created_at_sort_key(visible_bets[bid]), reverse=True)
+    for bet_id in ordered_visible_bet_ids:
+        bet = visible_bets[bet_id]
+        bet_text = _build_active_bet_text(bet, lang=lang)
         if not bet_text:
             continue
-        bet_snapshot = _build_active_bet_snapshot(bet, bet_text)
+        bet_snapshot = _build_active_bet_snapshot(bet, bet_text, lang=lang)
 
         if bet_id in sent_message_ids:
             previous_text = sent_snapshots.get(bet_id)
@@ -501,11 +887,13 @@ async def sync_active_bets_for_user(
                     chat_id=chat_id,
                     message_id=sent_message_ids[bet_id],
                     text=bet_text,
-                    reply_markup=_build_active_bet_keyboard(bet),
+                    reply_markup=_build_active_bet_keyboard(bet, lang=lang),
                     parse_mode=ParseMode.HTML,
                     disable_web_page_preview=True,
                 )
                 sent_snapshots[bet_id] = bet_snapshot
+                state_changed = True
+                _log_info(f"✏️ Fogadás frissítve (chat_id={chat_id}, bet_id={bet_id}).")
                 continue
             except TelegramError as exc:
                 print(f"⚠️ Bet frissítés sikertelen (chat_id={chat_id}, bet_id={bet_id}): {exc}")
@@ -516,56 +904,86 @@ async def sync_active_bets_for_user(
                     except Exception:
                         pass
                 sent_snapshots.pop(bet_id, None)
+                state_changed = True
 
         message = await context.bot.send_message(
             chat_id=chat_id,
             text=bet_text,
-            reply_markup=_build_active_bet_keyboard(bet),
+                reply_markup=_build_active_bet_keyboard(bet, lang=lang),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
         )
         sent_message_ids[bet_id] = message.message_id
         sent_snapshots[bet_id] = bet_snapshot
+        state_changed = True
+        _log_info(f"📨 Új fogadás kiküldve (chat_id={chat_id}, bet_id={bet_id}, message_id={message.message_id}).")
 
     # Már nem aktív fogadások eltüntetése (üzenet törlés)
-    stale_ids = [bet_id for bet_id in sent_message_ids if bet_id not in visible_bets]
+    stale_ids = sorted([bet_id for bet_id in sent_message_ids if bet_id not in visible_bets])
     for stale_id in stale_ids:
         message_id = sent_message_ids.pop(stale_id, None)
         sent_snapshots.pop(stale_id, None)
+        state_changed = True
         if message_id is None:
             continue
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            _log_info(f"🗑️ Megszűnt fogadás törölve (chat_id={chat_id}, bet_id={stale_id}, message_id={message_id}).")
         except Exception:
             # Üzenet már törölve / nem törölhető - ilyenkor csak lokális cache-ből vesszük ki.
             pass
 
+    if state_changed:
+        _mark_message_state_dirty()
+    return state_changed
+
+
+async def sync_active_bets_for_user(
+    user_id: int,
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> bool:
+    lock = _get_user_sync_lock(user_id)
+    async with lock:
+        return await _sync_active_bets_for_user_unlocked(user_id=user_id, chat_id=chat_id, context=context)
+
+
 
 async def sync_active_bets_for_all_users(context: ContextTypes.DEFAULT_TYPE) -> None:
-    for user_id, session in USER_SESSIONS.items():
+    any_changes = False
+    # Snapshot iteráció: ha közben session változik (pl. /start), ne dobjon RuntimeError-t.
+    for user_id, session in list(USER_SESSIONS.items()):
         if not bool(session.get("activated") and session.get("receive_bets")):
             continue
-        await sync_active_bets_for_user(user_id=user_id, chat_id=user_id, context=context)
+        try:
+            user_changed = await sync_active_bets_for_user(user_id=user_id, chat_id=user_id, context=context)
+            any_changes = any_changes or user_changed
+        except Exception as exc:
+            _log_warning(f"⚠️ User sync hiba (user_id={user_id}): {exc}")
+            continue
+
+    if any_changes:
+        _persist_message_state()
 
 
 def _supabase_configured() -> bool:
-    return bool(SUPABASE_URL and SUPABASE_KEY and SUPABASE_BETS_TABLE)
+    return bool(SUPABASE_URL and SUPABASE_READ_KEY and SUPABASE_BETS_TABLE)
 
 
 def _load_active_bets_from_supabase() -> Optional[List[Dict[str, Any]]]:
     global SUPABASE_LAST_SYNC_SUMMARY
     if not _supabase_configured():
-        SUPABASE_LAST_SYNC_SUMMARY = "SUPABASE_URL/SUPABASE_KEY/SUPABASE_BETS_TABLE nincs teljesen beállítva"
+        SUPABASE_LAST_SYNC_SUMMARY = "SUPABASE_URL/SUPABASE_READ_KEY/SUPABASE_BETS_TABLE nincs teljesen beállítva"
         _log_warning(f"⚠️ Supabase sync kihagyva: {SUPABASE_LAST_SYNC_SUMMARY}.")
         return None
 
-    query = urllib_parse.urlencode({"select": "*", "limit": SUPABASE_QUERY_LIMIT})
+    query = urllib_parse.urlencode({"select": "*", "order": "created_at.desc", "limit": SUPABASE_QUERY_LIMIT})
     url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_BETS_TABLE}?{query}"
     req = urllib_request.Request(
         url,
         headers={
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "apikey": SUPABASE_READ_KEY,
+            "Authorization": f"Bearer {SUPABASE_READ_KEY}",
             "Accept": "application/json",
             "Prefer": "count=exact",
         },
@@ -615,9 +1033,24 @@ async def sync_supabase_bets_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     set_active_bets(bets)
     await sync_active_bets_for_all_users(context)
+    _persist_message_state()
 
 
-def build_selection_keyboard(selected: Set[str]) -> InlineKeyboardMarkup:
+async def refresh_and_sync_user_bets(
+    user_id: int,
+    chat_id: int,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """Azonnali Supabase frissítés + az aktuálisan elérhető fogadások kiküldése egy usernek."""
+    bets = await asyncio.to_thread(_load_active_bets_from_supabase)
+    if bets is not None:
+        set_active_bets(bets)
+    user_changed = await sync_active_bets_for_user(user_id=user_id, chat_id=chat_id, context=context)
+    if user_changed:
+        _persist_message_state(force=True)
+
+
+def build_selection_keyboard(selected: Set[str], lang: str = "hu") -> InlineKeyboardMarkup:
     rows: List[List[InlineKeyboardButton]] = []
     current_row: List[InlineKeyboardButton] = []
 
@@ -636,43 +1069,58 @@ def build_selection_keyboard(selected: Set[str]) -> InlineKeyboardMarkup:
     if current_row:
         rows.append(current_row)
 
-    rows.append([InlineKeyboardButton("💰 Nincs fiókod? Regisztrálj", url=AFFILIATE_LINK)])
-    rows.append([InlineKeyboardButton("✅ Kész", callback_data="bm_done")])
+    is_rs = _normalize_lang(lang) == "rs"
+    rows.append([InlineKeyboardButton("💰 Nemaš nalog? Registruj se" if is_rs else "💰 Nincs fiókod? Regisztrálj", url=AFFILIATE_LINK)])
+    rows.append([InlineKeyboardButton("✅ Gotovo" if is_rs else "✅ Kész", callback_data="bm_done")])
     return InlineKeyboardMarkup(rows)
 
 
-def build_guide_keyboard() -> InlineKeyboardMarkup:
+def build_guide_keyboard(lang: str = "hu") -> InlineKeyboardMarkup:
+    is_rs = _normalize_lang(lang) == "rs"
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("📘 Útmutató megnyitása", url=GUIDE_LINK)],
-            [InlineKeyboardButton("✅ Okés, elolvastam az útmutatót", callback_data="guide_done")],
+            [InlineKeyboardButton("📘 Otvori vodič" if is_rs else "📘 Útmutató megnyitása", url=GUIDE_LINK)],
+            [InlineKeyboardButton("✅ Pročitao sam vodič" if is_rs else "✅ Okés, elolvastam az útmutatót", callback_data="guide_done")],
         ]
     )
 
 
-def selection_text(selected: Set[str], is_edit_mode: bool = False) -> str:
+def selection_text(selected: Set[str], is_edit_mode: bool = False, lang: str = "hu") -> str:
     if not selected:
-        selected_list = "Még semmit nem választottál."
+        selected_list_hu = "Még semmit nem választottál."
+        selected_list_sr = "Još ništa nisi izabrao."
     else:
         pretty = []
         for bm in BOOKMAKERS:
             if bm["key"] in selected:
                 pretty.append(f"{bm['emoji']} {bm['name']}")
-        selected_list = "\n".join(pretty)
+        selected_list_hu = "\n".join(pretty)
+        selected_list_sr = selected_list_hu
 
     if is_edit_mode:
-        header = "⚙️ <b>GoldenTipsHungary</b> • Szűrők módosítása"
+        header_hu = "⚙️ <b>GoldenTipsHungary</b> • Szűrők módosítása"
+        header_sr = "⚙️ <b>GoldenTipsHungary</b> • Izmena filtera"
     else:
-        header = "✅ <b>GoldenTipsHungary</b> • Aktiváció sikeres"
+        header_hu = "✅ <b>GoldenTipsHungary</b> • Aktiváció sikeres"
+        header_sr = "✅ <b>GoldenTipsHungary</b> • Aktivacija uspešna"
 
-    return (
-        f"{header}\n\n"
+    hu = (
+        f"{header_hu}\n\n"
         "Add meg, mely irodáknál vagy regisztrálva\n"
         "(többet is kiválaszthatsz, de maximum 6-ot), majd nyomd meg a <b>✅ Kész</b> gombot.\n\n"
         f"💰 Nincs fiókod valamelyik irodánál? <a href=\"{AFFILIATE_LINK}\"><b>Itt tudsz regisztrálni</b></a>.\n\n"
         f"📘 Ha valami nem tiszta, <a href=\"{GUIDE_LINK}\"><b>olvasd el az útmutatót</b></a>.\n\n"
-        f"<b>Kiválasztott irodák:</b>\n{selected_list}"
+        f"<b>Kiválasztott irodák:</b>\n{selected_list_hu}"
     )
+    sr = (
+        f"{header_sr}\n\n"
+        "Izaberi kod kojih kladionica si registrovan\n"
+        "(možeš izabrati više, ali najviše 6), pa klikni na dugme <b>✅ Gotovo</b>.\n\n"
+        f"💰 Nemaš nalog kod neke kladionice? <a href=\"{AFFILIATE_LINK}\"><b>Registruj se ovde</b></a>.\n\n"
+        f"📘 Ako nešto nije jasno, <a href=\"{GUIDE_LINK}\"><b>pročitaj uputstvo</b></a>.\n\n"
+        f"<b>Izabrane kladionice:</b>\n{selected_list_sr}"
+    )
+    return sr if _normalize_lang(lang) == "rs" else hu
 
 
 def build_demo_bet_text(book1: dict, book2: dict) -> str:
@@ -732,11 +1180,20 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "receive_bets": False,
         "active_bet_messages": {},
         "active_bet_snapshots": {},
+        "no_bets_notice_sent": False,
+        "lang": RUNTIME_LANG,
     }
+    _mark_message_state_dirty()
+    _persist_message_state(force=True)
 
     await update.message.reply_text(
-        "👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>\n\n"
-        "Kérlek add meg a vásárláshoz kapott <b>aktivációs kódodat</b> az induláshoz.",
+        (
+            "👋 <b>Üdvözlünk a GoldenTipsHungary rendszerében!</b>\n\n"
+            "Kérlek add meg a vásárláshoz kapott <b>aktivációs kódodat</b> az induláshoz."
+        ) if not _is_rs_lang(USER_SESSIONS[user_id]) else (
+            "👋 <b>Dobrodošao u GoldenTipsHungary sistem!</b>\n\n"
+            "Unesi svoj <b>aktivacioni kod</b> koji si dobio kupovinom."
+        ),
         parse_mode=ParseMode.HTML,
     )
 
@@ -754,7 +1211,7 @@ async def filters_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if not session.get("activated"):
         await update.message.reply_text(
-            "Először aktiváld a fiókodat a /start paranccsal.",
+            "Először aktiváld a fiókodat a /start paranccsal." if not _is_rs_lang(session) else "Prvo aktiviraj nalog komandom /start.",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -764,9 +1221,10 @@ async def filters_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     selected: Set[str] = session["selected"]  # type: ignore
 
     await update.message.reply_text(
-        text=selection_text(selected, is_edit_mode=True),
+        text=selection_text(selected, is_edit_mode=True, lang=_session_lang(session)),
         parse_mode=ParseMode.HTML,
-        reply_markup=build_selection_keyboard(selected),
+        reply_markup=build_selection_keyboard(selected, lang=_session_lang(session)),
+        disable_web_page_preview=True,
     )
 
 
@@ -784,6 +1242,12 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     state = session.get("state")
 
+    if state == "awaiting_language":
+        # Backward compatibility for previously persisted state.
+        session["lang"] = RUNTIME_LANG
+        session["state"] = "awaiting_code"
+        state = "awaiting_code"
+
     if state == "awaiting_code":
         if ACTIVATION_SERVICE.has_valid_code(text):
             previous_owner_id = ACTIVATION_SERVICE.bind_code_to_user(text, user_id)
@@ -796,7 +1260,11 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     "receive_bets": False,
                     "active_bet_messages": {},
                     "active_bet_snapshots": {},
+                    "no_bets_notice_sent": False,
+                    "lang": RUNTIME_LANG,
                 }
+                _mark_message_state_dirty()
+                _persist_message_state(force=True)
 
             session["activated"] = True
             session["state"] = "awaiting_guide"
@@ -807,35 +1275,34 @@ async def text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     "📘 <b>Mielőtt elkezdenél fogadni</b>, érdemes elolvasni az útmutatónkat.\n"
                     "Csak 5–6 perc, rengeteg kezdőhibát segít elkerülni, "
                     "és a praktikákkal több pénzt is tudsz keresni."
+                ) if not _is_rs_lang(session) else (
+                    "📘 <b>Pre nego što počneš da se kladiš</b>, preporučujemo da pročitaš naš vodič.\n"
+                    "Traje samo 5–6 minuta, pomaže da izbegneš početničke greške "
+                    "i da uz taktike zaradiš više."
                 ),
                 parse_mode=ParseMode.HTML,
-                reply_markup=build_guide_keyboard(),
+                reply_markup=build_guide_keyboard(_session_lang(session)),
                 disable_web_page_preview=True,
             )
         else:
             await update.message.reply_text(
-                "❌ <b>GoldenTipsHungary</b>\n"
-                "Hibás aktivációs kód.\n\n"
-                "Próbáld újra (demo kód: <b>123</b>).",
+                (
+                    "❌ <b>GoldenTipsHungary</b>\n"
+                    "Hibás aktivációs kód.\n\n"
+                    "Próbáld újra (teszt kód: <b>123</b>)."
+                ) if not _is_rs_lang(session) else (
+                    "❌ <b>GoldenTipsHungary</b>\n"
+                    "Pogrešan aktivacioni kod.\n\n"
+                    "Pokušaj ponovo (test kod: <b>123</b>)."
+                ),
                 parse_mode=ParseMode.HTML,
             )
         return
 
-    if state == "awaiting_guide":
-        await update.message.reply_text(
-            "Először nyisd meg az útmutatót, majd nyomd meg: <b>✅ Okés, elolvastam az útmutatót</b>.",
-            parse_mode=ParseMode.HTML,
-        )
-        return
-
-    if state == "selecting_books":
-        await update.message.reply_text(
-            "👆 Válassz az inline gombokkal, majd nyomd meg a <b>✅ Kész</b> gombot.",
-            parse_mode=ParseMode.HTML,
-        )
-        return
-
-    await update.message.reply_text("Írd be: /start (újrakezdéshez)")
+    await update.message.reply_text(
+        "Ahhoz, hogy újra kapj fogadásokat, kérlek írd be: /start" if not _is_rs_lang(session) else "Da bi ponovo primao opklade, pošalji: /start",
+        parse_mode=ParseMode.HTML,
+    )
 
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -855,83 +1322,88 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     if data == "guide_done":
         if session.get("state") != "awaiting_guide":
-            await query.answer("Először /start és aktivációs kód szükséges.", show_alert=True)
+            await query.answer("Prvo su potrebni /start i aktivacioni kod." if _is_rs_lang(session) else "Először /start és aktivációs kód szükséges.", show_alert=True)
             return
 
         session["state"] = "selecting_books"
         selected: Set[str] = session["selected"]  # type: ignore
 
-        await query.answer("Szuper! Jöhetnek a kiválasztott irodák ✅")
+        await query.answer("Sjajno! Odaberi kladionice ✅" if _is_rs_lang(session) else "Szuper! Jöhetnek a kiválasztott irodák ✅")
         await query.edit_message_text(
-            text="✅ Útmutató visszaigazolva.",
+            text="✅ Vodič potvrđen." if _is_rs_lang(session) else "✅ Útmutató visszaigazolva.",
             parse_mode=ParseMode.HTML,
         )
         if query.message is not None:
             await context.bot.send_message(
                 chat_id=query.message.chat.id,
-                text=selection_text(selected, is_edit_mode=False),
+                text=selection_text(selected, is_edit_mode=False, lang=_session_lang(session)),
                 parse_mode=ParseMode.HTML,
-                reply_markup=build_selection_keyboard(selected),
+                reply_markup=build_selection_keyboard(selected, lang=_session_lang(session)),
                 disable_web_page_preview=True,
             )
         return
 
     if session.get("state") not in {"selecting_books", "ready"}:
-        await query.answer("Először /start és aktivációs kód szükséges.", show_alert=True)
+        await query.answer("Prvo su potrebni /start i aktivacioni kod." if _is_rs_lang(session) else "Először /start és aktivációs kód szükséges.", show_alert=True)
         return
 
     if data == "open_filters":
         if not session.get("activated"):
-            await query.answer("Először /start és aktivációs kód szükséges.", show_alert=True)
+            await query.answer("Prvo su potrebni /start i aktivacioni kod." if _is_rs_lang(session) else "Először /start és aktivációs kód szükséges.", show_alert=True)
             return
 
         session["state"] = "selecting_books"
         session["receive_bets"] = False
-        await query.answer("Szűrőmódosítás megnyitva ⚙️")
+        await query.answer("Otvorena izmena filtera ⚙️" if _is_rs_lang(session) else "Szűrőmódosítás megnyitva ⚙️")
         await query.edit_message_text(
-            text=selection_text(selected, is_edit_mode=True),
+            text=selection_text(selected, is_edit_mode=True, lang=_session_lang(session)),
             parse_mode=ParseMode.HTML,
-            reply_markup=build_selection_keyboard(selected),
+            reply_markup=build_selection_keyboard(selected, lang=_session_lang(session)),
+            disable_web_page_preview=True,
         )
         return
 
     if data.startswith("bm:"):
         key = data.split(":", 1)[1]
         if key not in BOOKMAKER_BY_KEY:
-            await query.answer("Ismeretlen iroda.", show_alert=True)
+            await query.answer("Nepoznata kladionica." if _is_rs_lang(session) else "Ismeretlen iroda.", show_alert=True)
             return
 
         if key in selected:
             selected.remove(key)
-            await query.answer("Eltávolítva ✅")
+            await query.answer("Uklonjeno ✅" if _is_rs_lang(session) else "Eltávolítva ✅")
         else:
             if len(selected) >= MAX_SELECTED_BOOKMAKERS:
-                await query.answer(f"Maximum {MAX_SELECTED_BOOKMAKERS} irodát választhatsz.", show_alert=True)
+                await query.answer((f"Možeš izabrati najviše {MAX_SELECTED_BOOKMAKERS} kladionica." if _is_rs_lang(session) else f"Maximum {MAX_SELECTED_BOOKMAKERS} irodát választhatsz."), show_alert=True)
                 return
             selected.add(key)
-            await query.answer("Hozzáadva ✅")
+            await query.answer("Dodato ✅" if _is_rs_lang(session) else "Hozzáadva ✅")
 
         await query.edit_message_text(
-            text=selection_text(selected),
+            text=selection_text(selected, lang=_session_lang(session)),
             parse_mode=ParseMode.HTML,
-            reply_markup=build_selection_keyboard(selected),
+            reply_markup=build_selection_keyboard(selected, lang=_session_lang(session)),
+            disable_web_page_preview=True,
         )
         return
 
     if data == "bm_done":
         if len(selected) < 2:
-            await query.answer("Válassz legalább 2 irodát az arbitrázshoz.", show_alert=True)
+            await query.answer("Izaberi bar 2 kladionice za arbitražu." if _is_rs_lang(session) else "Válassz legalább 2 irodát az arbitrázshoz.", show_alert=True)
             return
         if len(selected) > MAX_SELECTED_BOOKMAKERS:
-            await query.answer(f"Maximum {MAX_SELECTED_BOOKMAKERS} irodát választhatsz.", show_alert=True)
+            await query.answer((f"Možeš izabrati najviše {MAX_SELECTED_BOOKMAKERS} kladionica." if _is_rs_lang(session) else f"Maximum {MAX_SELECTED_BOOKMAKERS} irodát választhatsz."), show_alert=True)
             return
 
         session["state"] = "ready"
         session["receive_bets"] = True
         session["active_bet_messages"] = {}
         session["active_bet_snapshots"] = {}
+        session["no_bets_notice_sent"] = False
+        _mark_message_state_dirty()
+        _persist_message_state(force=True)
 
-        await query.answer("GoldenTipsHungary demo tipp érkezik 🚀")
+        await query.answer("Stižu GoldenTipsHungary tipovi 🚀" if _is_rs_lang(session) else "GoldenTipsHungary tipp érkezik 🚀")
 
         await query.edit_message_text(
             text=(
@@ -940,64 +1412,101 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 "Ha módosítanád, hogy melyik irodákról kapj értesítést, írd be a chatbe: <b>/irodak</b>\n"
                 f"📘 Útmutató: <a href=\"{GUIDE_LINK}\"><b>Itt tudod elolvasni</b></a>.\n\n"
                 "Küldöm a jelenleg aktív fogadásokat..."
+            ) if not _is_rs_lang(session) else (
+                "✅ <b>GoldenTipsHungary</b>\n"
+                "Kladionice su sačuvane!\n\n"
+                "Ako želiš da izmeniš sa kojih kladionica primaš obaveštenja, pošalji: <b>/kladionice</b>\n"
+                f"📘 Vodič: <a href=\"{GUIDE_LINK}\"><b>Ovde možeš pročitati</b></a>.\n\n"
+                "Šaljem trenutno aktivne opklade..."
             ),
             parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
         )
 
         if query.message is not None:
             print(f"ℹ️ Kezdeti aktív fogadás szinkron indul (chat_id={query.message.chat.id}, selected={sorted(selected)}).")
-            await sync_active_bets_for_user(user_id=user_id, chat_id=query.message.chat.id, context=context)
+            await refresh_and_sync_user_bets(user_id=user_id, chat_id=query.message.chat.id, context=context)
         return
 
-    await query.answer("Ismeretlen művelet.")
+    await query.answer("Nepoznata akcija." if _is_rs_lang(session) else "Ismeretlen művelet.")
 
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message is None:
         return
 
+    session = get_session(update.effective_user.id) if update.effective_user is not None else {"lang": "hu"}
     await update.message.reply_text(
-        "/start - GoldenTipsHungary demo flow indítása\n"
-        "/irodak - szűrt irodák módosítása\n"
-        "/supabase - Supabase kapcsolódási igények\n"
-        "/help - segítség"
+        (
+            "/start - GoldenTipsHungary flow indítása\n"
+            "/irodak - szűrt irodák módosítása\n"
+            "/help - segítség"
+        ) if not _is_rs_lang(session) else (
+            "/start - pokretanje GoldenTipsHungary toka\n"
+            "/kladionice - izmena filtera kladionica\n"
+            "/help - pomoć"
+        )
     )
 
 
-async def supabase_requirements_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.message is None:
+
+def _collect_shutdown_notice_user_ids() -> List[int]:
+    user_ids: Set[int] = set()
+
+    for user_id, session in USER_SESSIONS.items():
+        if bool(session.get("activated") and session.get("receive_bets")):
+            user_ids.add(user_id)
+
+    for raw_user_id in PERSISTED_MESSAGE_STATE.keys():
+        if isinstance(raw_user_id, int):
+            user_ids.add(raw_user_id)
+
+    return sorted(user_ids)
+
+
+def _send_startup_restart_notice_sync() -> None:
+    if os.getenv("DISABLE_STARTUP_RESTART_NOTICE", "").strip().lower() in {"1", "true", "yes"}:
         return
 
-    status_text = "✅ konfigurálva" if _supabase_configured() else "⚠️ nincs konfigurálva"
-    interval_text = _format_sync_interval(SUPABASE_SYNC_INTERVAL_SECONDS)
-    await update.message.reply_text(
-        "Supabase bekötéshez ezek kellenek:\n"
-        "- SUPABASE_URL\n"
-        "- SUPABASE_KEY vagy SUPABASE_ANON_KEY (olvasási jogosultsággal)\n"
-        "- opcionálisan: SUPABASE_SERVICE_ROLE_KEY (csak szerver oldali env-ben)\n"
-        "- SUPABASE_BETS_TABLE (alapértelmezett: tips)\n"
-        "- SUPABASE_QUERY_LIMIT (alapértelmezett: 100, maximum: 1000)\n"
-        "- SUPABASE_SYNC_INTERVAL_SECONDS (alapértelmezett: 10, minimum: 3)\n\n"
-        "Elvárt tábla mezők minimum:\n"
-        "- id (egyedi)\n"
-        "- text vagy (book1_key + book2_key) vagy (bookmaker1 + bookmaker2)\n\n"
-        f"Állapot: {status_text}\n"
-        f"Jelenlegi adatbázis-ellenőrzési gyakoriság: {interval_text}\n"
-        f"Utolsó Supabase sync: {SUPABASE_LAST_SYNC_SUMMARY}\n"
-        "A bot folyamatosan szinkronizál, így új/módosított/törölt sorok megjelennek vagy eltűnnek a chaten.\n"
-        "A service role kulcsot ne mentsd a tárolóba, csak szerver oldali környezeti változóba."
-    )
+    user_ids = _collect_shutdown_notice_user_ids()
+    if not user_ids:
+        return
+
+    message_text = "Ahhoz, hogy újra kapj fogadásokat, kérlek írd be: /start" if RUNTIME_LANG != "rs" else "Da bi ponovo primao opklade, pošalji: /start"
+
+    for chat_id in user_ids:
+        payload = urllib_parse.urlencode({
+            "chat_id": str(chat_id),
+            "text": message_text,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+        }).encode("utf-8")
+        req = urllib_request.Request(
+            f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        try:
+            with urllib_request.urlopen(req, timeout=5):
+                pass
+        except Exception as exc:
+            _log_warning(f"⚠️ Indulási /start értesítés sikertelen (chat_id={chat_id}): {exc}")
+
 
 
 # =========================
 # MAIN
 # =========================
 def main() -> None:
+    global RUNTIME_LANG
+    RUNTIME_LANG = _select_runtime_language_sync()
+    _ensure_bookmaker_links_file_exists()
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("irodak", filters_handler))
-    app.add_handler(CommandHandler("supabase", supabase_requirements_handler))
+    app.add_handler(CommandHandler("kladionice", filters_handler))
     app.add_handler(CommandHandler("help", help_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
@@ -1005,7 +1514,9 @@ def main() -> None:
     if _supabase_configured() and app.job_queue is not None:
         app.job_queue.run_repeating(sync_supabase_bets_job, interval=SUPABASE_SYNC_INTERVAL_SECONDS, first=1)
 
-    print("✅ GoldenTipsHungary demo bot elindult (polling)...")
+    _send_startup_restart_notice_sync()
+
+    print("✅ GoldenTipsHungary bot elindult (polling)...")
     app.run_polling(drop_pending_updates=True)
 
 
